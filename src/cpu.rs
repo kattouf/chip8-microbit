@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 
 const FONT_SPRITES_LOCATION: usize = 0x50;
 const FONT_SPRITES: [u8; 80] = [
@@ -20,7 +20,7 @@ const FONT_SPRITES: [u8; 80] = [
     0xF0, 0x80, 0x80, 0x80, 0xF0, // C
     0xE0, 0x90, 0x90, 0x90, 0xE0, // D
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-    0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
 pub struct CPU {
@@ -31,10 +31,37 @@ pub struct CPU {
     stack_pointer: usize,
     index_register: u16,
     modern_mode: bool,
+    peripheral: Peripheral,
+}
+
+struct Timer();
+impl Timer {
+    fn start(&self, value: u8) {
+        unimplemented!();
+    }
+
+    fn current_value(&self) -> u8 {
+        unimplemented!();
+    }
+}
+
+struct Display();
+struct Keypad();
+
+pub struct Peripheral {
+    delay_timer: Timer,
+    sound_timer: Timer,
+    display: Display,
+    keypad: Keypad,
+}
+impl Peripheral {
+    pub fn new() -> Self {
+        Peripheral { delay_timer: Timer {}, sound_timer: Timer {}, display: Display {}, keypad: Keypad {} }
+    }
 }
 
 impl CPU {
-    pub fn new() -> Self {
+    pub fn new(peripheral: Peripheral) -> Self {
         CPU {
             registers: [0; 16],
             position_in_memory: 0x200,
@@ -43,6 +70,7 @@ impl CPU {
             stack_pointer: 0,
             index_register: 0,
             modern_mode: false,
+            peripheral,
         }
     }
 
@@ -87,13 +115,13 @@ impl CPU {
                 (0xA, _, _, _) => self.set_innn(nnn),
                 (0xB, _, _, _) => self.jump_with_offset(x, nnn),
                 (0xC, _, _, _) => self.random(x, nn),
-                (0xD, _, _, _) => { todo!("DXYN") },
-                (0xE, _, 0x9, 0xE) => { todo!("EX9E") },
-                (0xE, _, 0xA, 0x1) => { todo!("EXA1") },
-                (0xF, _, 0x0, 0x7) => { todo!("FX07") },
-                (0xF, _, 0x0, 0xA) => { todo!("FX0A") },
-                (0xF, _, 0x1, 0x5) => { todo!("FX15") },
-                (0xF, _, 0x1, 0x8) => { todo!("FX18") },
+                (0xD, _, _, _) => todo!("DXYN"),
+                (0xE, _, 0x9, 0xE) => todo!("EX9E"),
+                (0xE, _, 0xA, 0x1) => todo!("EXA1"),
+                (0xF, _, 0x0, 0x7) => self.set_x_delay_timer(x),
+                (0xF, _, 0x0, 0xA) => todo!("FX0A"),
+                (0xF, _, 0x1, 0x5) => self.set_delay_timer_x(x),
+                (0xF, _, 0x1, 0x8) => self.set_sound_timer_x(x),
                 (0xF, _, 0x1, 0xE) => self.add_ix(x),
                 (0xF, _, 0x2, 0x9) => self.set_i_to_address_of_hex_sprite_stored_in_x(x),
                 (0xF, _, 0x3, 0x3) => self.bcd_x(x),
@@ -104,8 +132,24 @@ impl CPU {
         }
     }
 
+    fn set_x_delay_timer(&mut self, x: u8) {
+        let timer_value = self.peripheral.delay_timer.current_value();
+        self.registers[x as usize] = timer_value;
+    }
+
+    fn set_delay_timer_x(&mut self, x: u8) {
+        let x_val = self.registers[x as usize];
+        self.peripheral.delay_timer.start(x_val);
+    }
+
+    fn set_sound_timer_x(&mut self, x: u8) {
+        let x_val = self.registers[x as usize];
+        self.peripheral.sound_timer.start(x_val);
+    }
+
     fn set_i_to_address_of_hex_sprite_stored_in_x(&mut self, x: u8) {
-        self.index_register = FONT_SPRITES_LOCATION as u16 + (self.registers[x as usize] & 0x0F) as u16;
+        self.index_register =
+            FONT_SPRITES_LOCATION as u16 + (self.registers[x as usize] & 0x0F) as u16;
     }
 
     fn bcd_x(&mut self, x: u8) {
@@ -118,7 +162,8 @@ impl CPU {
     fn save_regs_to_memory(&mut self, x: u8) {
         if self.modern_mode {
             for offset in 0..=x {
-                self.memory[self.index_register as usize + offset as usize] = self.registers[offset as usize];
+                self.memory[self.index_register as usize + offset as usize] =
+                    self.registers[offset as usize];
             }
         } else {
             for offset in 0..=x {
@@ -131,7 +176,8 @@ impl CPU {
     fn load_regs_from_memory(&mut self, x: u8) {
         if self.modern_mode {
             for offset in 0..=x {
-                self.registers[offset as usize] = self.memory[self.index_register as usize + offset as usize];
+                self.registers[offset as usize] =
+                    self.memory[self.index_register as usize + offset as usize];
             }
         } else {
             for offset in 0..=x {
@@ -160,13 +206,21 @@ impl CPU {
     }
 
     fn shift_y_left(&mut self, x: u8, y: u8) {
-        let val = if self.modern_mode { self.registers[x as usize] } else { self.registers[y as usize] };
+        let val = if self.modern_mode {
+            self.registers[x as usize]
+        } else {
+            self.registers[y as usize]
+        };
         self.registers[0xF] = (val & 0b1000_0000) >> 7;
         self.registers[x as usize] = val << 1;
     }
 
     fn shift_y_right(&mut self, x: u8, y: u8) {
-        let val = if self.modern_mode { self.registers[x as usize] } else { self.registers[y as usize] };
+        let val = if self.modern_mode {
+            self.registers[x as usize]
+        } else {
+            self.registers[y as usize]
+        };
         self.registers[0xF] = val & 0b0000_0001;
         self.registers[x as usize] = val >> 1;
     }
@@ -260,7 +314,7 @@ impl CPU {
     }
 
     fn jump(&mut self, addr: u16) {
-       self.position_in_memory = addr as usize;
+        self.position_in_memory = addr as usize;
     }
 
     fn jump_with_offset(&mut self, x: u8, nnn: u16) {

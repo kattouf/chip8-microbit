@@ -5,24 +5,37 @@
 
 use core::{cell::RefCell, ops::DerefMut};
 
-use cortex_m::interrupt::Mutex;
+use cortex_m::{interrupt::Mutex, peripheral};
 use cortex_m_rt::entry;
-use rtt_target::{rtt_init_print, rprintln, rprint};
+use embedded_hal::{
+    digital::v2::{InputPin, StatefulOutputPin},
+    timer::*,
+};
 use panic_rtt_target as _;
-use embedded_hal::{timer::*, digital::v2::{InputPin, StatefulOutputPin}};
+use rtt_target::{rprint, rprintln, rtt_init_print};
 // use panic_halt as _;
 
 use embedded_graphics::{
     mono_font::{ascii::FONT_6X10, MonoTextStyleBuilder},
     pixelcolor::BinaryColor,
     prelude::*,
-    text::{Baseline, Text}, primitives::{PrimitiveStyleBuilder, RoundedRectangle, Rectangle},
+    primitives::{PrimitiveStyleBuilder, Rectangle, RoundedRectangle},
+    text::{Baseline, Text},
 };
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 
 use microbit::{
-    hal::{twim, timer::Instance, Timer, gpio::{PullUp, p0::*, p1::*, Input, Output, OpenDrain, p1::{P1_00, P1_03}, OpenDrainConfig, Level}},
-    pac::{twim0::frequency::FREQUENCY_A, interrupt},
+    hal::{
+        gpio::{
+            p0::*,
+            p1::*,
+            p1::{P1_00, P1_03},
+            Input, Level, OpenDrain, OpenDrainConfig, Output, PullUp,
+        },
+        timer::Instance,
+        twim, Timer,
+    },
+    pac::{interrupt, twim0::frequency::FREQUENCY_A},
 };
 
 use keypad::{keypad_new, keypad_struct};
@@ -30,7 +43,12 @@ use void::Void;
 
 use embedded_hal::{blocking::delay::DelayMs, digital::v2::OutputPin};
 
-keypad_struct!{
+mod cpu;
+use cpu::CPU;
+
+use crate::cpu::Peripheral;
+
+keypad_struct! {
     pub struct HexKeypad<Error = Void> {
         rows: (
             P0_17<Input<PullUp>>,
@@ -46,10 +64,6 @@ keypad_struct!{
         ),
     }
 }
-
-mod cpu;
-use cpu::CPU;
-
 static TIMER: Mutex<RefCell<Option<Timer<microbit::pac::TIMER0>>>> = Mutex::new(RefCell::new(None));
 
 #[entry]
@@ -79,10 +93,14 @@ fn keypad_demo() {
             pins.p0_03.into_pullup_input(),
         ),
         columns: (
-            pins.p0_10.into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
-            pins.p0_01.into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
-            pins.p0_13.into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
-            pins.p1_02.into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
+            pins.p0_10
+                .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
+            pins.p0_01
+                .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
+            pins.p0_13
+                .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
+            pins.p1_02
+                .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
         ),
     });
 
@@ -132,7 +150,7 @@ fn TIMER0() {
 }
 
 fn cpu_test() {
-    let mut cpu = CPU::new();
+    let mut cpu = CPU::new(Peripheral::new());
 
     cpu.registers[0] = 5;
     cpu.registers[1] = 10;
@@ -172,10 +190,9 @@ fn display_demo() {
         Rectangle::new(Point::new(0, 20), Size::new(128, 44)),
         Size::new(10, 10),
     )
-        .into_styled(rectangle_style)
-        .draw(&mut display)
-        .unwrap();
-
+    .into_styled(rectangle_style)
+    .draw(&mut display)
+    .unwrap();
 
     let text_style = MonoTextStyleBuilder::new()
         .font(&FONT_6X10)
@@ -189,7 +206,6 @@ fn display_demo() {
     Text::with_baseline("Hello Rust!", Point::new(16, 30), text_style, Baseline::Top)
         .draw(&mut display)
         .unwrap();
-
 
     display.flush().unwrap();
 }
