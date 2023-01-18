@@ -46,7 +46,26 @@ impl Timer {
 }
 
 struct Display();
+impl Display {
+    fn clear_screen(&self) {
+        unimplemented!();
+    }
+
+    fn draw_sprite(&self, coordinate: (u8, u8), data: [u8; 15], data_len: u8) -> bool {
+        unimplemented!();
+    }
+}
+
 struct Keypad();
+impl Keypad {
+    fn wait_for_keypress(&self) -> u8 {
+        unimplemented!()
+    }
+
+    fn is_pressed(&self, key: u8) -> bool {
+        unimplemented!()
+    }
+}
 
 pub struct Peripheral {
     delay_timer: Timer,
@@ -93,7 +112,7 @@ impl CPU {
 
             match (c, x, y, n) {
                 (0, 0, 0, 0) => { todo!(); },
-                (0, 0, 0xE, 0) => { todo!("00E0"); },
+                (0, 0, 0xE, 0) => self.clear_screen(),
                 (0, 0, 0xE, 0xE) => self.ret(),
                 (0x1, _, _, _) => self.jump(nnn),
                 (0x2, _, _, _) => self.call(nnn),
@@ -115,11 +134,11 @@ impl CPU {
                 (0xA, _, _, _) => self.set_innn(nnn),
                 (0xB, _, _, _) => self.jump_with_offset(x, nnn),
                 (0xC, _, _, _) => self.random(x, nn),
-                (0xD, _, _, _) => todo!("DXYN"),
-                (0xE, _, 0x9, 0xE) => todo!("EX9E"),
-                (0xE, _, 0xA, 0x1) => todo!("EXA1"),
+                (0xD, _, _, _) => self.draw_sprite(x, y, n),
+                (0xE, _, 0x9, 0xE) => self.skip_next_if_key_pressed(x),
+                (0xE, _, 0xA, 0x1) => self.skip_next_if_key_not_pressed(x),
                 (0xF, _, 0x0, 0x7) => self.set_x_delay_timer(x),
-                (0xF, _, 0x0, 0xA) => todo!("FX0A"),
+                (0xF, _, 0x0, 0xA) => self.wait_for_keypress(x),
                 (0xF, _, 0x1, 0x5) => self.set_delay_timer_x(x),
                 (0xF, _, 0x1, 0x8) => self.set_sound_timer_x(x),
                 (0xF, _, 0x1, 0xE) => self.add_ix(x),
@@ -132,17 +151,55 @@ impl CPU {
         }
     }
 
+    fn wait_for_keypress(&mut self, x: u8) {
+        self.registers[x as usize] = self.peripheral.keypad.wait_for_keypress();
+    }
+
+    fn skip_next_if_key_pressed(&mut self, x: u8) {
+        let x_val = self.registers[x as usize] & 0x0F;
+
+        if self.peripheral.keypad.is_pressed(x_val) {
+            self.position_in_memory += 2;
+        }
+    }
+
+    fn skip_next_if_key_not_pressed(&mut self, x: u8) {
+        let x_val = self.registers[x as usize] & 0x0F;
+
+        if !self.peripheral.keypad.is_pressed(x_val) {
+            self.position_in_memory += 2;
+        }
+    }
+
+    fn draw_sprite(&mut self, x: u8, y: u8, n: u8) {
+        let x_val = self.registers[x as usize];
+        let y_val = self.registers[y as usize];
+
+        let coordinate = (x_val % 64, y_val % 32);
+        let src_data = &self.memory[self.index_register.into()..15];
+
+        let mut data: [u8; 15] = [0; 15];
+        data.copy_from_slice(src_data);
+
+        let part_of_pixel_did_unset = self.peripheral.display.draw_sprite(coordinate, data, n);
+        self.registers[0xF] = if part_of_pixel_did_unset { 1 } else { 0 };
+    }
+
+    fn clear_screen(&self) {
+        self.peripheral.display.clear_screen();
+    }
+
     fn set_x_delay_timer(&mut self, x: u8) {
         let timer_value = self.peripheral.delay_timer.current_value();
         self.registers[x as usize] = timer_value;
     }
 
-    fn set_delay_timer_x(&mut self, x: u8) {
+    fn set_delay_timer_x(&self, x: u8) {
         let x_val = self.registers[x as usize];
         self.peripheral.delay_timer.start(x_val);
     }
 
-    fn set_sound_timer_x(&mut self, x: u8) {
+    fn set_sound_timer_x(&self, x: u8) {
         let x_val = self.registers[x as usize];
         self.peripheral.sound_timer.start(x_val);
     }
