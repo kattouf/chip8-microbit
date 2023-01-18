@@ -5,7 +5,7 @@
 
 use core::{cell::RefCell, ops::DerefMut};
 
-use cortex_m::{interrupt::Mutex, peripheral};
+use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
 use embedded_hal::{
     digital::v2::{InputPin, StatefulOutputPin},
@@ -44,9 +44,10 @@ use void::Void;
 use embedded_hal::{blocking::delay::DelayMs, digital::v2::OutputPin};
 
 mod cpu;
-use cpu::CPU;
+mod peripheral;
 
-use crate::cpu::Peripheral;
+use cpu::CPU;
+use crate::peripheral::Peripheral;
 
 keypad_struct! {
     pub struct HexKeypad<Error = Void> {
@@ -147,28 +148,6 @@ fn TIMER0() {
             timer.cancel();
         }
     });
-}
-
-fn cpu_test() {
-    let mut cpu = CPU::new(Peripheral::new());
-
-    cpu.registers[0] = 5;
-    cpu.registers[1] = 10;
-
-    let mem = &mut cpu.memory;
-    mem[0x000] = 0x21; mem[0x001] = 0x00;
-    mem[0x002] = 0x21; mem[0x003] = 0x00;
-    mem[0x004] = 0x00; mem[0x005] = 0x00;
-
-    mem[0x100] = 0x80; mem[0x101] = 0x14;
-    mem[0x102] = 0x80; mem[0x103] = 0x14;
-    mem[0x104] = 0x00; mem[0x105] = 0xEE;
-
-    cpu.run();
-
-    assert_eq!(cpu.registers[0], 45);
-
-    rprintln!("Regiester '0' value: {}", cpu.registers[0]);
 }
 
 fn display_demo() {

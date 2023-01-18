@@ -2,7 +2,9 @@
 
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
+use crate::peripheral::{Peripheral, timer::Timer, display::Display, keypad::Keypad};
 
+const PROGRAM_LOCATION: usize = 0x200;
 const FONT_SPRITES_LOCATION: usize = 0x50;
 const FONT_SPRITES: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -24,9 +26,9 @@ const FONT_SPRITES: [u8; 80] = [
 ];
 
 pub struct CPU {
-    pub registers: [u8; 16],
-    pub position_in_memory: usize,
-    pub memory: [u8; 0x1000], // 4kb
+    registers: [u8; 16],
+    position_in_memory: usize,
+    memory: [u8; 0x1000], // 4kb
     stack: [u16; 16],
     stack_pointer: usize,
     index_register: u16,
@@ -34,70 +36,31 @@ pub struct CPU {
     peripheral: Peripheral,
 }
 
-struct Timer();
-impl Timer {
-    fn start(&self, value: u8) {
-        unimplemented!();
-    }
-
-    fn current_value(&self) -> u8 {
-        unimplemented!();
-    }
-}
-
-struct Display();
-impl Display {
-    fn clear_screen(&self) {
-        unimplemented!();
-    }
-
-    fn draw_sprite(&self, coordinate: (u8, u8), data: [u8; 15], data_len: u8) -> bool {
-        unimplemented!();
-    }
-}
-
-struct Keypad();
-impl Keypad {
-    fn wait_for_keypress(&self) -> u8 {
-        unimplemented!()
-    }
-
-    fn is_pressed(&self, key: u8) -> bool {
-        unimplemented!()
-    }
-}
-
-pub struct Peripheral {
-    delay_timer: Timer,
-    sound_timer: Timer,
-    display: Display,
-    keypad: Keypad,
-}
-impl Peripheral {
-    pub fn new() -> Self {
-        Peripheral { delay_timer: Timer {}, sound_timer: Timer {}, display: Display {}, keypad: Keypad {} }
-    }
-}
-
 impl CPU {
-    pub fn new(peripheral: Peripheral) -> Self {
+    pub fn new(modern_mode: bool, peripheral: Peripheral) -> Self {
         CPU {
             registers: [0; 16],
-            position_in_memory: 0x200,
+            position_in_memory: PROGRAM_LOCATION,
             memory: [0; 4096],
             stack: [0; 16],
             stack_pointer: 0,
             index_register: 0,
-            modern_mode: false,
+            modern_mode,
             peripheral,
         }
     }
 
-    pub fn run(&mut self) {
+    pub fn load_data(&mut self, program: &[u8]) {
         for (offset, byte) in FONT_SPRITES.iter().enumerate() {
             self.memory[FONT_SPRITES_LOCATION + offset] = *byte;
         }
 
+        for (offset, byte) in program.iter().enumerate() {
+            self.memory[PROGRAM_LOCATION + offset] = *byte;
+        }
+    }
+
+    pub fn run(&mut self) {
         loop {
             let opcode = self.read_opcode();
             self.position_in_memory += 2;
