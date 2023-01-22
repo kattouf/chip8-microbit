@@ -2,7 +2,11 @@ use embedded_graphics::{draw_target::DrawTarget, pixelcolor::BinaryColor, prelud
 use microbit::display;
 use ssd1306::{mode::BufferedGraphicsMode, prelude::*, I2CDisplayInterface, Ssd1306};
 
-static mut PIXEL_BUFFER: [bool; 64 * 32] = [false; 64 * 32];
+const BUFFER_WIDTH: usize = 64;
+const BUFFER_HEIGHT: usize = 32;
+
+static mut PIXEL_BUFFER: [bool; BUFFER_WIDTH * BUFFER_HEIGHT] =
+    [false; BUFFER_WIDTH * BUFFER_HEIGHT];
 
 pub struct Display<I2C> {
     ssd1306driver:
@@ -45,12 +49,12 @@ where
         let mut pixel_unset_flag = false;
         unsafe {
             for byte_num in 0..bytes_len {
-                if coordinate.1 + byte_num > 32 - 1 {
+                if coordinate.1 + byte_num > BUFFER_HEIGHT - 1 {
                     break;
                 }
 
-                let row_start = (coordinate.1 + byte_num) * 64;
-                let row_end = (coordinate.1 + byte_num + 1) * 64 - 1;
+                let row_start = (coordinate.1 + byte_num) * BUFFER_WIDTH;
+                let row_end = (coordinate.1 + byte_num + 1) * BUFFER_WIDTH - 1;
 
                 let sprite_start: usize = row_start + coordinate.0 as usize;
 
@@ -75,12 +79,25 @@ where
             let pixels = PIXEL_BUFFER.iter().enumerate().map({
                 |(offset, bit)| {
                     Pixel(
-                        Point::new((offset % 64) as i32, (offset / 32) as i32),
+                        Point::new(
+                            (offset % BUFFER_WIDTH) as i32,
+                            (offset / BUFFER_WIDTH) as i32,
+                        ),
                         BinaryColor::from(*bit),
                     )
                 }
             });
-            self.ssd1306driver.draw_iter(pixels).unwrap();
+            let upscale_pixels = pixels.flat_map({
+                |pixel| {
+                    [
+                        Pixel(Point::new(pixel.0.x * 2, pixel.0.y * 2), pixel.1),
+                        Pixel(Point::new(pixel.0.x * 2 + 1, pixel.0.y * 2), pixel.1),
+                        Pixel(Point::new(pixel.0.x * 2, pixel.0.y * 2 + 1), pixel.1),
+                        Pixel(Point::new(pixel.0.x * 2 + 1, pixel.0.y * 2 + 1), pixel.1),
+                    ]
+                }
+            });
+            self.ssd1306driver.draw_iter(upscale_pixels).unwrap();
             self.ssd1306driver.flush().unwrap();
         }
         pixel_unset_flag
