@@ -1,8 +1,6 @@
-#![allow(dead_code)]
-
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
-use crate::peripheral::{Peripheral, timer::Timer, display::Display, keypad::Keypad};
+use crate::peripheral::Peripheral;
 
 const PROGRAM_LOCATION: usize = 0x200;
 const FONT_SPRITES_LOCATION: usize = 0x50;
@@ -55,6 +53,7 @@ impl CPU {
             self.memory[FONT_SPRITES_LOCATION + offset] = *byte;
         }
 
+        // TOP CONSTRAINT 0xE8F
         for (offset, byte) in program.iter().enumerate() {
             self.memory[PROGRAM_LOCATION + offset] = *byte;
         }
@@ -74,7 +73,7 @@ impl CPU {
             let nnn = opcode & 0xFFF;
 
             match (c, x, y, n) {
-                (0, 0, 0, 0) => { todo!(); },
+                (0, 0, 0, 0) => { panic!("zero insrtuction code"); },
                 (0, 0, 0xE, 0) => self.clear_screen(),
                 (0, 0, 0xE, 0xE) => self.ret(),
                 (0x1, _, _, _) => self.jump(nnn),
@@ -138,17 +137,17 @@ impl CPU {
         let x_val = self.registers[x as usize];
         let y_val = self.registers[y as usize];
 
-        let coordinate = (x_val % 64, y_val % 32);
-        let src_data = &self.memory[self.index_register.into()..15];
+        let coordinate = ((x_val % 64) as usize, (y_val % 32) as usize);
+        let src_data = &self.memory[self.index_register.into()..(self.index_register + 15).into()];
 
         let mut data: [u8; 15] = [0; 15];
         data.copy_from_slice(src_data);
 
-        let part_of_pixel_did_unset = self.peripheral.display.draw_sprite(coordinate, data, n);
+        let part_of_pixel_did_unset = self.peripheral.display.draw_sprite(coordinate, data, n.into());
         self.registers[0xF] = if part_of_pixel_did_unset { 1 } else { 0 };
     }
 
-    fn clear_screen(&self) {
+    fn clear_screen(&mut self) {
         self.peripheral.display.clear_screen();
     }
 

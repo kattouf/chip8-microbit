@@ -1,39 +1,29 @@
 #![no_main]
 #![no_std]
-#![allow(dead_code)]
 #![allow(unused_imports)]
 
 use core::{cell::RefCell, ops::DerefMut};
 
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
+use cpu::CPU;
 use embedded_hal::{
-    digital::v2::{InputPin, StatefulOutputPin},
+    digital::v2::InputPin,
     timer::*,
 };
-use panic_rtt_target as _;
-use rtt_target::{rprint, rprintln, rtt_init_print};
-// use panic_halt as _;
-
-use embedded_graphics::{
-    mono_font::{ascii::FONT_6X10, MonoTextStyleBuilder},
-    pixelcolor::BinaryColor,
-    prelude::*,
-    primitives::{PrimitiveStyleBuilder, Rectangle, RoundedRectangle},
-    text::{Baseline, Text},
-};
-use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
+// use panic_rtt_target as _;
+use peripheral::{Peripheral, display::Display};
+// use rtt_target::{rprint, rprintln, rtt_init_print};
+use panic_halt as _;
 
 use microbit::{
     hal::{
         gpio::{
             p0::*,
             p1::*,
-            p1::{P1_00, P1_03},
             Input, Level, OpenDrain, OpenDrainConfig, Output, PullUp,
         },
-        timer::Instance,
-        twim, Timer,
+        Timer,
     },
     pac::{interrupt, twim0::frequency::FREQUENCY_A},
 };
@@ -41,150 +31,246 @@ use microbit::{
 use keypad::{keypad_new, keypad_struct};
 use void::Void;
 
-use embedded_hal::{blocking::delay::DelayMs, digital::v2::OutputPin};
+use embedded_hal::blocking::delay::DelayMs;
 
 mod cpu;
 mod peripheral;
 
-use cpu::CPU;
-use crate::peripheral::Peripheral;
+// keypad_struct! {
+//     pub struct HexKeypad<Error = Void> {
+//         rows: (
+//             P0_17<Input<PullUp>>,
+//             P0_04<Input<PullUp>>,
+//             P0_09<Input<PullUp>>,
+//             P0_03<Input<PullUp>>,
+//         ),
+//         columns: (
+//             P0_10<Output<OpenDrain>>,
+//             P0_01<Output<OpenDrain>>,
+//             P0_13<Output<OpenDrain>>,
+//             P1_02<Output<OpenDrain>>,
+//         ),
+//     }
+// }
+// static TIMER: Mutex<RefCell<Option<Timer<microbit::pac::TIMER0>>>> = Mutex::new(RefCell::new(None));
 
-keypad_struct! {
-    pub struct HexKeypad<Error = Void> {
-        rows: (
-            P0_17<Input<PullUp>>,
-            P0_04<Input<PullUp>>,
-            P0_09<Input<PullUp>>,
-            P0_03<Input<PullUp>>,
-        ),
-        columns: (
-            P0_10<Output<OpenDrain>>,
-            P0_01<Output<OpenDrain>>,
-            P0_13<Output<OpenDrain>>,
-            P1_02<Output<OpenDrain>>,
-        ),
-    }
-}
-static TIMER: Mutex<RefCell<Option<Timer<microbit::pac::TIMER0>>>> = Mutex::new(RefCell::new(None));
+const PROGRAM: [u8; 132] = [
+    0x00,
+    0xe0,
+    0xa2,
+    0x2a,
+    0x60,
+    0x0c,
+    0x61,
+    0x08,
+    0xd0,
+    0x1f,
+    0x70,
+    0x09,
+    0xa2,
+    0x39,
+    0xd0,
+    0x1f,
+    0xa2,
+    0x48,
+    0x70,
+    0x08,
+    0xd0,
+    0x1f,
+    0x70,
+    0x04,
+    0xa2,
+    0x57,
+    0xd0,
+    0x1f,
+    0x70,
+    0x08,
+    0xa2,
+    0x66,
+    0xd0,
+    0x1f,
+    0x70,
+    0x08,
+    0xa2,
+    0x75,
+    0xd0,
+    0x1f,
+    0x12,
+    0x28,
+    0xff,
+    0x00,
+    0xff,
+    0x00,
+    0x3c,
+    0x00,
+    0x3c,
+    0x00,
+    0x3c,
+    0x00,
+    0x3c,
+    0x00,
+    0xff,
+    0x00,
+    0xff,
+    0xff,
+    0x00,
+    0xff,
+    0x00,
+    0x38,
+    0x00,
+    0x3f,
+    0x00,
+    0x3f,
+    0x00,
+    0x38,
+    0x00,
+    0xff,
+    0x00,
+    0xff,
+    0x80,
+    0x00,
+    0xe0,
+    0x00,
+    0xe0,
+    0x00,
+    0x80,
+    0x00,
+    0x80,
+    0x00,
+    0xe0,
+    0x00,
+    0xe0,
+    0x00,
+    0x80,
+    0xf8,
+    0x00,
+    0xfc,
+    0x00,
+    0x3e,
+    0x00,
+    0x3f,
+    0x00,
+    0x3b,
+    0x00,
+    0x39,
+    0x00,
+    0xf8,
+    0x00,
+    0xf8,
+    0x03,
+    0x00,
+    0x07,
+    0x00,
+    0x0f,
+    0x00,
+    0xbf,
+    0x00,
+    0xfb,
+    0x00,
+    0xf3,
+    0x00,
+    0xe3,
+    0x00,
+    0x43,
+    0xe0,
+    0x00,
+    0xe0,
+    0x00,
+    0x80,
+    0x00,
+    0x80,
+    0x00,
+    0x80,
+    0x00,
+    0x80,
+    0x00,
+    0xe0,
+    0x00,
+    0xe0,
+];
 
 #[entry]
 fn main() -> ! {
-    rtt_init_print!();
+    // rtt_init_print!();
 
-    // display_demo();
-    // timer_demo();
-    keypad_demo();
-
-    loop {
-        // cortex_m::asm::nop();
-    }
+    test_program();
+    loop {}
 }
 
-fn keypad_demo() {
+fn test_program() {
     let board = microbit::Board::take().unwrap();
-
-    let pins = board.pins;
-    let mut timer = Timer::new(board.TIMER0);
-
-    let keypad = keypad_new!(HexKeypad {
-        rows: (
-            pins.p0_17.into_pullup_input(),
-            pins.p0_04.into_pullup_input(),
-            pins.p0_09.into_pullup_input(),
-            pins.p0_03.into_pullup_input(),
-        ),
-        columns: (
-            pins.p0_10
-                .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
-            pins.p0_01
-                .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
-            pins.p0_13
-                .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
-            pins.p1_02
-                .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
-        ),
-    });
-
-    let keys = keypad.decompose();
-
-    loop {
-        for (row_index, row) in keys.iter().enumerate() {
-            rprint!("row {}: ", row_index);
-            for key in row.iter() {
-                let is_pressed = if key.is_low().unwrap() { 1 } else { 0 };
-                rprint!(" {} ", is_pressed);
-            }
-            rprintln!();
-        }
-
-        timer.delay_ms(1000_u16);
-    }
-
-    // Give up ownership of the row and column pins.
-    // let ((_r0, _r1, _r2, _r3), (_c0, _c1, _c2, _c3)) = keypad.release();
+    let peripheral = Peripheral::new(board);
+    let mut cpu = CPU::new(false, peripheral);
+    cpu.load_data(&PROGRAM);
+    cpu.run();
 }
 
-fn timer_demo() {
-    let board = microbit::Board::take().unwrap();
-    let mut timer = Timer::one_shot(board.TIMER0);
-    timer.enable_interrupt();
-    unsafe {
-        microbit::pac::NVIC::unmask(microbit::pac::Interrupt::TIMER0);
-    }
+// fn keypad_demo() {
+//     let board = microbit::Board::take().unwrap();
 
-    rprintln!("Start");
-    timer.start(1_000_000_u32);
+//     let pins = board.pins;
+//     let mut timer = Timer::new(board.TIMER0);
 
-    cortex_m::interrupt::free(move |cs| {
-        *TIMER.borrow(cs).borrow_mut() = Some(timer);
-    });
-}
+//     let keypad = keypad_new!(HexKeypad {
+//         rows: (
+//             pins.p0_17.into_pullup_input(),
+//             pins.p0_04.into_pullup_input(),
+//             pins.p0_09.into_pullup_input(),
+//             pins.p0_03.into_pullup_input(),
+//         ),
+//         columns: (
+//             pins.p0_10
+//                 .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
+//             pins.p0_01
+//                 .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
+//             pins.p0_13
+//                 .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
+//             pins.p1_02
+//                 .into_open_drain_output(OpenDrainConfig::HighDrive0Disconnect1, Level::Low),
+//         ),
+//     });
 
-#[interrupt]
-fn TIMER0() {
-    cortex_m::interrupt::free(|cs| {
-        rprintln!("End");
-        if let Some(ref mut timer) = TIMER.borrow(cs).borrow_mut().deref_mut() {
-            timer.cancel();
-        }
-    });
-}
+//     let keys = keypad.decompose();
 
-fn display_demo() {
-    let board = microbit::Board::take().unwrap();
-    let i2c = { twim::Twim::new(board.TWIM0, board.i2c_external.into(), FREQUENCY_A::K100) };
+//     loop {
+//         for (row_index, row) in keys.iter().enumerate() {
+//             // rprint!("row {}: ", row_index);
+//             for key in row.iter() {
+//                 let is_pressed = if key.is_low().unwrap() { 1 } else { 0 };
+//                 // rprint!(" {} ", is_pressed);
+//             }
+//             // rprintln!();
+//         }
 
-    let interface = I2CDisplayInterface::new(i2c);
-    let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
-        .into_buffered_graphics_mode();
-    display.init().unwrap();
+//         timer.delay_ms(1000_u16);
+//     }
 
-    let rectangle_style = PrimitiveStyleBuilder::new()
-        .stroke_color(BinaryColor::On)
-        .stroke_width(3)
-        .fill_color(BinaryColor::Off)
-        .build();
+//     // Give up ownership of the row and column pins.
+//     // let ((_r0, _r1, _r2, _r3), (_c0, _c1, _c2, _c3)) = keypad.release();
+// }
 
-    RoundedRectangle::with_equal_corners(
-        Rectangle::new(Point::new(0, 20), Size::new(128, 44)),
-        Size::new(10, 10),
-    )
-    .into_styled(rectangle_style)
-    .draw(&mut display)
-    .unwrap();
+// fn timer_demo() {
+//     let board = microbit::Board::take().unwrap();
+//     let mut timer = Timer::one_shot(board.TIMER0);
+//     timer.enable_interrupt();
+//     unsafe {
+//         microbit::pac::NVIC::unmask(microbit::pac::Interrupt::TIMER0);
+//     }
 
-    let text_style = MonoTextStyleBuilder::new()
-        .font(&FONT_6X10)
-        .text_color(BinaryColor::On)
-        .build();
+//     // rprintln!("Start");
+//     timer.start(1_000_000_u32);
 
-    Text::with_baseline("Hello world!", Point::new(16, 0), text_style, Baseline::Top)
-        .draw(&mut display)
-        .unwrap();
+//     cortex_m::interrupt::free(move |cs| {
+//         *TIMER.borrow(cs).borrow_mut() = Some(timer);
+//     });
+// }
 
-    Text::with_baseline("Hello Rust!", Point::new(16, 30), text_style, Baseline::Top)
-        .draw(&mut display)
-        .unwrap();
-
-    display.flush().unwrap();
-}
+// #[interrupt]
+// fn TIMER0() {
+//     cortex_m::interrupt::free(|cs| {
+//         // rprintln!("End");
+//         if let Some(ref mut timer) = TIMER.borrow(cs).borrow_mut().deref_mut() {
+//             timer.cancel();
+//         }
+//     });
+// }
