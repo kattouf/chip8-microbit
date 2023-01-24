@@ -53,13 +53,13 @@ where
             let sprite_start: usize = row_start + coordinate.0 as usize;
 
             let sprite_row_byte = data[byte_num as usize];
-            for offset in 0..8 {
-                let sprite_bit = if (sprite_row_byte >> (7 - offset)) & 0b0000_0001 == 1 {
+            for bit_shift in 0..8 {
+                let sprite_bit = if (sprite_row_byte >> (7 - bit_shift)) & 0b0000_0001 == 1 {
                     true
                 } else {
                     false
                 };
-                let bit_location = sprite_start as usize + offset;
+                let bit_location = sprite_start as usize + bit_shift;
                 if bit_location > row_end {
                     break;
                 }
@@ -70,31 +70,36 @@ where
             }
         }
 
-        let mut scaled_buffer = [false; DISPLAY_WIDTH * DISPLAY_HEIGHT];
+        let mut scaled_pixel_buffer = [false; DISPLAY_WIDTH * DISPLAY_HEIGHT];
         let scale = DISPLAY_WIDTH / BUFFER_WIDTH;
-        for (offset, bit) in scaled_buffer.iter_mut().enumerate() {
-            let x = offset % DISPLAY_WIDTH;
-            let y = offset / DISPLAY_WIDTH;
+        for (offset, bit) in scaled_pixel_buffer.iter_mut().enumerate() {
+            let disp_x = offset % DISPLAY_WIDTH;
+            let disp_y = offset / DISPLAY_WIDTH;
 
-            let buf_x = x / scale;
-            let buf_y = y / scale;
+            let buf_x = disp_x / scale;
+            let buf_y = disp_y / scale;
             let buf_offset = buf_y * BUFFER_WIDTH + buf_x;
 
             *bit = self.pixel_buffer[buf_offset];
         }
 
-        let mut raw_pixel_data = [0u8; DISPLAY_WIDTH * DISPLAY_HEIGHT / 8];
-        for (offset, byte) in raw_pixel_data.iter_mut().enumerate() {
+        let mut driver_friendly_data = [0u8; DISPLAY_WIDTH * DISPLAY_HEIGHT / 8];
+        for (offset, byte) in driver_friendly_data.iter_mut().enumerate() {
             let x = offset % DISPLAY_WIDTH;
             let y_base = offset / DISPLAY_WIDTH * 8;
-            for y in y_base..(y_base + 8) {
+            for bit_shift in 0..8 {
+                let y = y_base + bit_shift;
                 let bit_loc = y * DISPLAY_WIDTH + x;
-                let value = if scaled_buffer[bit_loc] == true { 1 } else { 0 };
-                *byte = *byte & !(1 << (y - y_base)) | (value << (y - y_base))
+                let value = if scaled_pixel_buffer[bit_loc] == true {
+                    1
+                } else {
+                    0
+                };
+                *byte = *byte & !(1 << bit_shift) | (value << bit_shift)
             }
         }
 
-        self.ssd1306driver.draw(&raw_pixel_data).unwrap();
+        self.ssd1306driver.draw(&driver_friendly_data).unwrap();
         pixel_unset_flag
     }
 }
