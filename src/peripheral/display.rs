@@ -1,5 +1,3 @@
-use embedded_graphics::{draw_target::DrawTarget, pixelcolor::BinaryColor, prelude::*};
-use microbit::display;
 use ssd1306::{mode::BufferedGraphicsMode, prelude::*, I2CDisplayInterface, Ssd1306};
 
 const BUFFER_WIDTH: usize = 64;

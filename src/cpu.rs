@@ -59,7 +59,7 @@ impl CPU {
         }
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> ! {
         loop {
             let opcode = self.read_opcode();
             self.position_in_memory += 2;
