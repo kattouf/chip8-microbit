@@ -11,10 +11,10 @@ use embedded_hal::{
     digital::v2::InputPin,
     timer::*,
 };
-// use panic_rtt_target as _;
+use panic_rtt_target as _;
 use peripheral::{Peripheral, display::Display};
-// use rtt_target::{rprint, rprintln, rtt_init_print};
-use panic_halt as _;
+use rtt_target::{rprint, rprintln, rtt_init_print};
+// use panic_halt as _;
 
 use microbit::{
     hal::{
@@ -29,6 +29,7 @@ use microbit::{
 };
 
 use keypad::{keypad_new, keypad_struct};
+use rtt_target::rtt_init;
 use void::Void;
 
 use embedded_hal::blocking::delay::DelayMs;
@@ -191,7 +192,7 @@ const PROGRAM: [u8; 132] = [
 
 #[entry]
 fn main() -> ! {
-    // rtt_init_print!();
+    rtt_init_print!();
 
     test_program();
     loop {}
