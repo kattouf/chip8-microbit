@@ -295,7 +295,7 @@ impl CPU {
     }
 
     fn add_xnn(&mut self, x: u8, nn: u8) {
-        self.registers[x as usize] += nn;
+        self.registers[x as usize] = self.registers[x as usize].wrapping_add(nn);
     }
 
     fn skip_next_if_equal_xnn(&mut self, x: u8, nn: u8) {

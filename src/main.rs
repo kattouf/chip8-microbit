@@ -20,6 +20,6 @@ fn main() -> ! {
     let board = microbit::Board::take().unwrap();
     let peripheral = Peripheral::new(board);
     let mut cpu = CPU::new(false, peripheral);
-    cpu.load_data(&test_roms::IBM_LOGO);
+    cpu.load_data(&test_roms::TEST_OPCODE);
     cpu.run();
 }
