@@ -21,6 +21,7 @@ impl Peripheral {
             delay_timer: Timer {},
             sound_timer: Timer {},
             display: Display::new(i2c),
-            keypad: Keypad {} }
+            keypad: Keypad::new(board.pins),
+        }
     }
 }

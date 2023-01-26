@@ -99,6 +99,7 @@ where
             }
         }
 
+        // TODO: draw changed area only
         self.ssd1306driver.draw(&driver_friendly_data).unwrap();
         pixel_unset_flag
     }
