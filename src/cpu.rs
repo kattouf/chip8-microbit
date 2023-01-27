@@ -156,12 +156,12 @@ impl CPU {
         self.registers[x as usize] = timer_value;
     }
 
-    fn set_delay_timer_x(&self, x: u8) {
+    fn set_delay_timer_x(&mut self, x: u8) {
         let x_val = self.registers[x as usize];
         self.peripheral.delay_timer.start(x_val);
     }
 
-    fn set_sound_timer_x(&self, x: u8) {
+    fn set_sound_timer_x(&mut self, x: u8) {
         let x_val = self.registers[x as usize];
         self.peripheral.sound_timer.start(x_val);
     }

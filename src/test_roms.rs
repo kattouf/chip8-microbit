@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 
 pub const IBM_LOGO: [u8; 132] = [
     0x00, 0xe0,
