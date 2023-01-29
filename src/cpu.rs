@@ -1,5 +1,3 @@
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
 use crate::peripheral::Peripheral;
 
 const PROGRAM_LOCATION: usize = 0x200;
@@ -48,11 +46,13 @@ impl CPU {
         }
     }
 
-    pub fn load_data(&mut self, program: &[u8]) {
+    pub fn load_data(&mut self, program: Option<&[u8]>) {
         for (offset, byte) in FONT_SPRITES.iter().enumerate() {
             self.memory[FONT_SPRITES_LOCATION + offset] = *byte;
         }
 
+        let serial_rom = self.peripheral.serial_reader.fetch_rom_from_serial_port();
+        let program = program.unwrap_or(&serial_rom);
         // TOP CONSTRAINT 0xE8F
         for (offset, byte) in program.iter().enumerate() {
             self.memory[PROGRAM_LOCATION + offset] = *byte;
@@ -168,7 +168,7 @@ impl CPU {
 
     fn set_i_to_address_of_hex_sprite_stored_in_x(&mut self, x: u8) {
         self.index_register =
-            FONT_SPRITES_LOCATION as u16 + (self.registers[x as usize] & 0x0F) as u16;
+            FONT_SPRITES_LOCATION as u16 + 5 * (self.registers[x as usize] & 0x0F) as u16;
     }
 
     fn bcd_x(&mut self, x: u8) {
@@ -216,8 +216,8 @@ impl CPU {
     }
 
     fn random(&mut self, x: u8, nn: u8) {
-        let mut small_rng = SmallRng::seed_from_u64(1337);
-        self.registers[x as usize] = small_rng.gen::<u8>() & nn;
+        let random_num = self.peripheral.rng.gen_random_byte();
+        self.registers[x as usize] = random_num & nn;
     }
 
     fn set_innn(&mut self, nnn: u16) {
