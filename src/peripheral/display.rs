@@ -99,8 +99,13 @@ where
             }
         }
 
-        // TODO: draw changed area only
-        self.ssd1306driver.draw(&driver_friendly_data).unwrap();
+        let coordinate = (coordinate.0 as u8, coordinate.1 as u8);
+        let sprite_start = (coordinate.0 * 2, coordinate.1 * 2);
+        let sprite_end = ((coordinate.0 + 8) * 2, (coordinate.1 + bytes_len as u8) * 2);
+
+        self.ssd1306driver.set_draw_area(sprite_start, sprite_end).unwrap();
+        self.ssd1306driver.bounded_draw(&driver_friendly_data, DISPLAY_WIDTH, sprite_start, sprite_end).unwrap();
+
         pixel_unset_flag
     }
 }
