@@ -11,7 +11,6 @@ use microbit::{
     }, board::Pins,
 };
 
-const KEYPAD_WIDTH: u8 = 4;
 keypad_struct! {
     pub struct HexKeypad<Error = Void> {
         rows: (
@@ -67,7 +66,7 @@ impl Keypad {
                 for (column_index, key) in row.iter().enumerate() {
                     let is_pressed = key.is_low().unwrap();
                     if is_pressed == true {
-                        return (row_index * 4 + column_index) as u8;
+                        return self.map_to_cosmac_vip_key(column_index as u8, row_index as u8);
                     }
                 }
             }
@@ -75,11 +74,53 @@ impl Keypad {
     }
 
     pub fn is_pressed(&self, key: u8) -> bool {
+        let (column, row) = self.map_from_cosmac_vip_key(key);
+
         let keys = self.keypad.decompose();
+        keys[row as usize][column as usize].is_low().unwrap()
+    }
 
-        let column = (key % KEYPAD_WIDTH) as usize;
-        let row = (key / KEYPAD_WIDTH) as usize;
+    fn map_to_cosmac_vip_key(&self, column: u8, row: u8) -> u8 {
+        match (column, row) {
+            (0, 3) => 0x1,
+            (0, 2) => 0x2,
+            (0, 1) => 0x3,
+            (0, 0) => 0xC,
+            (1, 3) => 0x4,
+            (1, 2) => 0x5,
+            (1, 1) => 0x6,
+            (1, 0) => 0xD,
+            (2, 3) => 0x7,
+            (2, 2) => 0x8,
+            (2, 1) => 0x9,
+            (2, 0) => 0xE,
+            (3, 3) => 0xA,
+            (3, 2) => 0x0,
+            (3, 1) => 0xB,
+            (3, 0) => 0xF,
+            _ => panic!("Unexpected key with column: {}, row: {}", column, row),
+        }
+    }
 
-        keys[row][column].is_low().unwrap()
+    fn map_from_cosmac_vip_key(&self, key: u8) -> (u8, u8) {
+        match key {
+            0x1 => (0, 3),
+            0x2 => (0, 2),
+            0x3 => (0, 1),
+            0xC => (0, 0),
+            0x4 => (1, 3),
+            0x5 => (1, 2),
+            0x6 => (1, 1),
+            0xD => (1, 0),
+            0x7 => (2, 3),
+            0x8 => (2, 2),
+            0x9 => (2, 1),
+            0xE => (2, 0),
+            0xA => (3, 3),
+            0x0 => (3, 2),
+            0xB => (3, 1),
+            0xF => (3, 0),
+            _ => panic!("Unexpected key {}", key),
+        }
     }
 }
