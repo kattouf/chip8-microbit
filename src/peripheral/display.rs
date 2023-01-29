@@ -1,4 +1,5 @@
-use ssd1306::{mode::BufferedGraphicsMode, prelude::*, I2CDisplayInterface, Ssd1306};
+use rtt_target::rprintln;
+use ssd1306::{mode::BasicMode, prelude::*, I2CDisplayInterface, Ssd1306};
 
 const BUFFER_WIDTH: usize = 64;
 const BUFFER_HEIGHT: usize = 32;
@@ -7,7 +8,7 @@ const DISPLAY_HEIGHT: usize = 64;
 
 pub struct Display<I2C> {
     ssd1306driver:
-        Ssd1306<I2CInterface<I2C>, DisplaySize128x64, BufferedGraphicsMode<DisplaySize128x64>>,
+        Ssd1306<I2CInterface<I2C>, DisplaySize128x64, BasicMode>,
     pixel_buffer: [bool; BUFFER_WIDTH * BUFFER_HEIGHT],
 }
 
@@ -17,8 +18,7 @@ where
 {
     pub fn new(i2c: I2C) -> Display<I2C> {
         let interface = I2CDisplayInterface::new(i2c);
-        let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
-            .into_buffered_graphics_mode();
+        let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0);
         display.init().unwrap();
 
         Display {
@@ -31,8 +31,7 @@ where
         for val in self.pixel_buffer.iter_mut() {
             *val = false;
         }
-        self.ssd1306driver.clear();
-        self.ssd1306driver.flush().unwrap();
+        self.ssd1306driver.clear().unwrap();
     }
 
     pub fn draw_sprite(
@@ -70,41 +69,58 @@ where
             }
         }
 
-        let mut scaled_pixel_buffer = [false; DISPLAY_WIDTH * DISPLAY_HEIGHT];
         let scale = DISPLAY_WIDTH / BUFFER_WIDTH;
-        for (offset, bit) in scaled_pixel_buffer.iter_mut().enumerate() {
-            let disp_x = offset % DISPLAY_WIDTH;
-            let disp_y = offset / DISPLAY_WIDTH;
-
-            let buf_x = disp_x / scale;
-            let buf_y = disp_y / scale;
-            let buf_offset = buf_y * BUFFER_WIDTH + buf_x;
-
-            *bit = self.pixel_buffer[buf_offset];
-        }
-
         let mut driver_friendly_data = [0u8; DISPLAY_WIDTH * DISPLAY_HEIGHT / 8];
         for (offset, byte) in driver_friendly_data.iter_mut().enumerate() {
-            let x = offset % DISPLAY_WIDTH;
-            let y_base = offset / DISPLAY_WIDTH * 8;
+            let disp_x = offset % DISPLAY_WIDTH;
+            let disp_y_base = offset / DISPLAY_WIDTH * 8;
             for bit_shift in 0..8 {
-                let y = y_base + bit_shift;
-                let bit_loc = y * DISPLAY_WIDTH + x;
-                let value = if scaled_pixel_buffer[bit_loc] == true {
+                let disp_y = disp_y_base + bit_shift;
+
+                let buf_x = disp_x / scale;
+                let buf_y = disp_y / scale;
+                let buf_offset = buf_y * BUFFER_WIDTH + buf_x;
+
+                let bit_value = if self.pixel_buffer[buf_offset] == true {
                     1
                 } else {
                     0
                 };
-                *byte = *byte & !(1 << bit_shift) | (value << bit_shift)
+                *byte = *byte & !(1 << bit_shift) | (bit_value << bit_shift)
             }
         }
 
+        let scale: u8 = scale as u8;
         let coordinate = (coordinate.0 as u8, coordinate.1 as u8);
-        let sprite_start = (coordinate.0 * 2, coordinate.1 * 2);
-        let sprite_end = ((coordinate.0 + 8) * 2, (coordinate.1 + bytes_len as u8) * 2);
+        let sprite_start = (coordinate.0 * scale, coordinate.1 * scale);
+        let sprite_end = (
+            (coordinate.0 + 8) * scale,
+            (coordinate.1 + bytes_len as u8 - 1) * scale,
+        );
+        let sprite_end = (
+            if sprite_end.0 > 128 {
+                128
+            } else {
+                sprite_end.0
+            },
+            if sprite_end.1 > 63 {
+                63
+            } else {
+                sprite_end.1
+            },
+        );
 
-        self.ssd1306driver.set_draw_area(sprite_start, sprite_end).unwrap();
-        self.ssd1306driver.bounded_draw(&driver_friendly_data, DISPLAY_WIDTH, sprite_start, sprite_end).unwrap();
+        self.ssd1306driver
+            .set_draw_area(sprite_start, sprite_end)
+            .unwrap();
+        self.ssd1306driver
+            .bounded_draw(
+                &driver_friendly_data,
+                DISPLAY_WIDTH,
+                sprite_start,
+                sprite_end,
+            )
+            .unwrap();
 
         pixel_unset_flag
     }

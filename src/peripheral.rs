@@ -21,7 +21,7 @@ pub struct Peripheral {
 
 impl Peripheral {
     pub fn new(board: Board) -> Self {
-        let i2c = twim::Twim::new(board.TWIM0, board.i2c_external.into(), FREQUENCY_A::K100);
+        let i2c = twim::Twim::new(board.TWIM0, board.i2c_external.into(), FREQUENCY_A::K400);
         let serial = {
             let serial = Uarte::new(
                 board.UARTE0,
