@@ -1,4 +1,3 @@
-use rtt_target::rprintln;
 use ssd1306::{mode::BasicMode, prelude::*, I2CDisplayInterface, Ssd1306};
 
 const BUFFER_WIDTH: usize = 64;
