@@ -110,6 +110,8 @@ impl CPU {
                 (0xF, _, 0x6, 0x5) => self.load_regs_from_memory(x),
                 _ => panic!("undefined opcode {:04x}", opcode),
             }
+
+            self.peripheral.clock_alignment_timer.wait();
         }
     }
 
