@@ -6,8 +6,7 @@ const DISPLAY_WIDTH: usize = 128;
 const DISPLAY_HEIGHT: usize = 64;
 
 pub struct Display<I2C> {
-    ssd1306driver:
-        Ssd1306<I2CInterface<I2C>, DisplaySize128x64, BasicMode>,
+    ssd1306driver: Ssd1306<I2CInterface<I2C>, DisplaySize128x64, BasicMode>,
     pixel_buffer: [bool; BUFFER_WIDTH * BUFFER_HEIGHT],
 }
 
@@ -19,6 +18,7 @@ where
         let interface = I2CDisplayInterface::new(i2c);
         let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0);
         display.init().unwrap();
+        display.clear().unwrap();
 
         Display {
             ssd1306driver: display,
@@ -89,36 +89,20 @@ where
             }
         }
 
-        let scale: u8 = scale as u8;
+        let scale = scale as u8;
         let coordinate = (coordinate.0 as u8, coordinate.1 as u8);
-        let sprite_start = (coordinate.0 * scale, coordinate.1 * scale);
-        let sprite_end = (
-            (coordinate.0 + 8) * scale,
-            (coordinate.1 + bytes_len as u8 - 1) * scale,
-        );
-        let sprite_end = (
-            if sprite_end.0 > 128 {
-                128
-            } else {
-                sprite_end.0
-            },
-            if sprite_end.1 > 63 {
-                63
-            } else {
-                sprite_end.1
-            },
-        );
 
+        let min_x = coordinate.0;
+        let min_y = coordinate.1;
+        let max_x = coordinate.0 + 8 - 1;
+        let max_y = coordinate.1 + bytes_len as u8 - 1;
+
+        let start = (min_x * scale, min_y * scale);
+        let end = ((max_x + 1).min(64) * scale, (max_y | 7).min(32) * scale);
+
+        self.ssd1306driver.set_draw_area(start, end).unwrap();
         self.ssd1306driver
-            .set_draw_area(sprite_start, sprite_end)
-            .unwrap();
-        self.ssd1306driver
-            .bounded_draw(
-                &driver_friendly_data,
-                DISPLAY_WIDTH,
-                sprite_start,
-                sprite_end,
-            )
+            .bounded_draw(&driver_friendly_data, DISPLAY_WIDTH, start, end)
             .unwrap();
 
         pixel_unset_flag

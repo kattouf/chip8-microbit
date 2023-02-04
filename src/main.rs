@@ -19,7 +19,7 @@ fn main() -> ! {
 
     let board = microbit::Board::take().unwrap();
     let peripheral = Peripheral::new(board);
-    let mut cpu = CPU::new(false, peripheral);
+    let mut cpu = CPU::new(true, peripheral);
     cpu.load_data(None);
     cpu.run();
 }
