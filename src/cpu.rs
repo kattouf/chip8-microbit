@@ -46,15 +46,13 @@ impl CPU {
         }
     }
 
-    pub fn load_data(&mut self, program: Option<&[u8]>) {
+    pub fn load_data(&mut self) {
         for (offset, byte) in FONT_SPRITES.iter().enumerate() {
             self.memory[FONT_SPRITES_LOCATION + offset] = *byte;
         }
 
-        let serial_rom = self.peripheral.serial_reader.fetch_rom_from_serial_port();
-        let program = program.unwrap_or(&serial_rom);
-        // TOP CONSTRAINT 0xE8F
-        for (offset, byte) in program.iter().enumerate() {
+        let rom = self.peripheral.rom_loader.load();
+        for (offset, byte) in rom.iter().enumerate() {
             self.memory[PROGRAM_LOCATION + offset] = *byte;
         }
     }

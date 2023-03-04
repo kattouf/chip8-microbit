@@ -2,13 +2,13 @@
 #![no_std]
 
 use cortex_m_rt::entry;
-use rtt_target::rtt_init_print;
 use panic_rtt_target as _;
+use rtt_target::rtt_init_print;
 // use panic_halt as _;
 
+mod common;
 mod cpu;
 mod peripheral;
-mod test_roms;
 
 use cpu::CPU;
 use peripheral::Peripheral;
@@ -20,6 +20,6 @@ fn main() -> ! {
     let board = microbit::Board::take().unwrap();
     let peripheral = Peripheral::new(board);
     let mut cpu = CPU::new(true, peripheral);
-    cpu.load_data(None);
+    cpu.load_data();
     cpu.run();
 }

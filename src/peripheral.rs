@@ -1,23 +1,36 @@
+pub mod clock_alignment_timer;
 pub mod display;
 pub mod keypad;
-pub mod timer;
-pub mod sound_timer;
-pub mod serial;
-pub mod clock_alignment_timer;
 pub mod rng;
+pub mod rom_loader;
+pub mod sound_timer;
+pub mod timer;
 
-use microbit::{hal::{twim, Twim, uarte::{Uarte, Parity, Baudrate}}, Board, pac::{twim0::frequency::FREQUENCY_A, TWIM0, TIMER0, TIMER1, UARTE0, TIMER2}};
+use microbit::{
+    hal::{
+        twim,
+        uarte::{Baudrate, Parity, Uarte},
+        Twim,
+    },
+    pac::{twim0::frequency::FREQUENCY_A, TIMER0, TIMER1, TIMER2, TWIM0, UARTE0},
+    Board,
+};
 
-use crate::peripheral::{sound_timer::SoundTimer, timer::Timer, display::Display, keypad::Keypad, rng::Rng};
-use self::{serial::{file_reader::SerialReader, uarte_port::UartePort}, clock_alignment_timer::ClockAlignmentTimer};
+use crate::{
+    common::uarte_port::UartePort,
+    peripheral::{
+        clock_alignment_timer::ClockAlignmentTimer, display::Display, keypad::Keypad, rng::Rng,
+        rom_loader::ROMLoader, sound_timer::SoundTimer, timer::Timer,
+    },
+};
 
 pub struct Peripheral {
+    pub rom_loader: ROMLoader<UartePort<UARTE0>>,
     pub delay_timer: Timer<TIMER0>,
     pub sound_timer: SoundTimer<TIMER1>,
     pub clock_alignment_timer: ClockAlignmentTimer<TIMER2>,
     pub display: Display<Twim<TWIM0>>,
     pub keypad: Keypad,
-    pub serial_reader: SerialReader<UartePort<UARTE0>>,
     pub rng: Rng,
 }
 
@@ -35,12 +48,12 @@ impl Peripheral {
         };
 
         Peripheral {
+            rom_loader: ROMLoader::new(serial),
             delay_timer: Timer::new(board.TIMER0),
             sound_timer: SoundTimer::new(board.TIMER1),
             clock_alignment_timer: ClockAlignmentTimer::new(board.TIMER2),
             display: Display::new(i2c),
             keypad: Keypad::new(board.pins),
-            serial_reader: SerialReader::new(serial),
             rng: Rng::new(board.RNG),
         }
     }
