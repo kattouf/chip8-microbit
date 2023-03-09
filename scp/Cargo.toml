@@ -1,0 +1,14 @@
+[package]
+name = "scp"
+description = "Simple(Stupid) communication protocol"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nb = "1.0.0"
+crc = "3.0"
+embedded-hal = { version = "0.2.6", optional = true }
+
+[features]
+
+embedded = ["dep:embedded-hal"]
