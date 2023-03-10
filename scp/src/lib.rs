@@ -3,21 +3,21 @@
 
 mod checksum_calculator;
 mod constants;
+pub mod decoder;
 #[cfg(feature = "embedded")]
 pub mod embedded;
-pub mod receiver;
-pub mod transmitter;
+pub mod encoder;
 
 #[cfg(test)]
 mod tests {
     extern crate alloc;
 
-    use crate::transmitter::Transmitter;
+    use crate::encoder::Encoder;
 
     use super::{
         checksum_calculator::{self, ChecksumCalculator},
         constants::START_BYTE,
-        receiver::{Receiver, ReceiverState},
+        decoder::{Decoder, DecodingState},
     };
     use alloc::boxed::Box;
 
@@ -30,7 +30,7 @@ mod tests {
     }
 
     #[test]
-    fn test_receiver() {
+    fn test_decoder() {
         // given
         let checksum_value = 1337u16;
         let message = "jepa";
@@ -45,27 +45,27 @@ mod tests {
         // when
         let checksum_calculator: Box<dyn ChecksumCalculator> =
             Box::new(MockChecksumCalculator(checksum_value));
-        let mut receiver = Receiver::new(checksum_calculator);
-        let mut received_payload: Option<([u8; 8192], u16)> = None;
+        let mut decoder = Decoder::new(checksum_calculator);
+        let mut decoded_payload: Option<([u8; 8192], u16)> = None;
 
         for byte in protocol_message {
-            let state = receiver.put_byte(byte);
-            if let ReceiverState::Complete(Ok(payload)) = state {
-                received_payload = Some(payload);
+            let state = decoder.put_byte(byte);
+            if let DecodingState::Complete(Ok(payload)) = state {
+                decoded_payload = Some(payload);
                 break;
             }
         }
 
         // then
-        let received_payload = received_payload.unwrap();
+        let decoded_payload = decoded_payload.unwrap();
         assert_eq!(
-            &received_payload.0[..received_payload.1.into()],
-            message.as_bytes()
+            &decoded_payload.0[..decoded_payload.1.into()],
+            payload
         );
     }
 
     #[test]
-    fn test_transmitter() {
+    fn test_encoder() {
         // given
         let checksum_value = 1337u16;
         let message = "jepa";
@@ -80,8 +80,8 @@ mod tests {
         // when
         let checksum_calculator: Box<dyn ChecksumCalculator> =
             Box::new(MockChecksumCalculator(checksum_value));
-        let transmitter = Transmitter::new(checksum_calculator);
-        let sended_protocol_message = transmitter.prepare_to_transmit(payload).ok().unwrap();
+        let encoder = Encoder::new(checksum_calculator);
+        let sended_protocol_message = encoder.encode(payload).ok().unwrap();
 
         // then
         assert_eq!(sended_protocol_message, protocol_message)

@@ -7,27 +7,27 @@ use crate::{
 use alloc::boxed::Box;
 
 #[derive(Debug)]
-pub enum ReceiverError {
+pub enum DecoderError {
     DataIsCorrupted,
 }
 
 #[derive(Debug)]
-pub enum ReceiverState {
+pub enum DecodingState {
     Idle,
     InProgress,
-    Complete(Result<([u8; 8192], u16), ReceiverError>),
+    Complete(Result<([u8; 8192], u16), DecoderError>),
 }
 
-impl ReceiverState {
+impl DecodingState {
     pub fn get_data(&self) -> Option<([u8; 8192], u16)> {
         match self {
-            ReceiverState::Complete(Ok(data)) => Some(*data),
+            DecodingState::Complete(Ok(data)) => Some(*data),
             _ => None,
         }
     }
 }
 
-pub struct Receiver {
+pub struct Decoder {
     checksum_calculator: Box<dyn ChecksumCalculator>,
     parsing_state: Option<Box<dyn ParsingState>>,
     data_length: u16,
@@ -35,13 +35,13 @@ pub struct Receiver {
     checksum: u16,
 }
 
-impl Receiver {
+impl Decoder {
     pub fn default() -> Self {
         Self::new(Box::new(CRCChecksumCalculator::new()))
     }
 
     pub fn new(checksum_calculator: Box<dyn ChecksumCalculator>) -> Self {
-        Receiver {
+        Decoder {
             checksum_calculator,
             parsing_state: Some(Box::new(WaitForStartByteState::new())),
             data_length: 0,
@@ -50,18 +50,18 @@ impl Receiver {
         }
     }
 
-    pub fn put_byte(&mut self, byte: u8) -> ReceiverState {
+    pub fn put_byte(&mut self, byte: u8) -> DecodingState {
         if let Some(parsing_state) = self.parsing_state.take() {
             self.parsing_state = Some(parsing_state.put_byte(byte, self));
 
             if self.parsing_state.as_ref().unwrap().is_complete() {
                 let result = match self.validate_data() {
                     Some(data) => Ok(data),
-                    None => Err(ReceiverError::DataIsCorrupted),
+                    None => Err(DecoderError::DataIsCorrupted),
                 };
-                return ReceiverState::Complete(result);
+                return DecodingState::Complete(result);
             } else {
-                return ReceiverState::InProgress;
+                return DecodingState::InProgress;
             }
         } else {
             unreachable!();
@@ -81,7 +81,7 @@ impl Receiver {
 }
 
 trait ParsingState {
-    fn put_byte(self: Box<Self>, byte: u8, receiver: &mut Receiver) -> Box<dyn ParsingState>;
+    fn put_byte(self: Box<Self>, byte: u8, decoder: &mut Decoder) -> Box<dyn ParsingState>;
 
     fn is_complete(&self) -> bool {
         false
@@ -97,7 +97,7 @@ impl WaitForStartByteState {
 }
 
 impl ParsingState for WaitForStartByteState {
-    fn put_byte(self: Box<Self>, byte: u8, _receiver: &mut Receiver) -> Box<dyn ParsingState> {
+    fn put_byte(self: Box<Self>, byte: u8, _decoder: &mut Decoder) -> Box<dyn ParsingState> {
         if byte == START_BYTE {
             Box::new(ReadDataLengthState::new())
         } else {
@@ -119,11 +119,11 @@ impl ReadDataLengthState {
 }
 
 impl ParsingState for ReadDataLengthState {
-    fn put_byte(mut self: Box<Self>, byte: u8, receiver: &mut Receiver) -> Box<dyn ParsingState> {
+    fn put_byte(mut self: Box<Self>, byte: u8, decoder: &mut Decoder) -> Box<dyn ParsingState> {
         if self.readed_bytes_count == 0 {
-            receiver.data_length = byte as u16;
+            decoder.data_length = byte as u16;
         } else if self.readed_bytes_count == 1 {
-            receiver.data_length |= (byte as u16) << 8;
+            decoder.data_length |= (byte as u16) << 8;
         } else {
             unreachable!();
         }
@@ -145,17 +145,19 @@ struct ReadDataState {
 
 impl ReadDataState {
     fn new() -> Self {
-        ReadDataState { readed_bytes_count: 0 }
+        ReadDataState {
+            readed_bytes_count: 0,
+        }
     }
 }
 
 impl ParsingState for ReadDataState {
-    fn put_byte(mut self: Box<Self>, byte: u8, receiver: &mut Receiver) -> Box<dyn ParsingState> {
-        receiver.data[self.readed_bytes_count as usize] = byte;
+    fn put_byte(mut self: Box<Self>, byte: u8, decoder: &mut Decoder) -> Box<dyn ParsingState> {
+        decoder.data[self.readed_bytes_count as usize] = byte;
         self.readed_bytes_count += 1;
-        if self.readed_bytes_count < receiver.data_length {
+        if self.readed_bytes_count < decoder.data_length {
             self
-        } else if self.readed_bytes_count == receiver.data_length {
+        } else if self.readed_bytes_count == decoder.data_length {
             Box::new(ReadChecksumState::new())
         } else {
             unreachable!();
@@ -176,11 +178,11 @@ impl ReadChecksumState {
 }
 
 impl ParsingState for ReadChecksumState {
-    fn put_byte(mut self: Box<Self>, byte: u8, receiver: &mut Receiver) -> Box<dyn ParsingState> {
+    fn put_byte(mut self: Box<Self>, byte: u8, decoder: &mut Decoder) -> Box<dyn ParsingState> {
         if self.readed_bytes_count == 0 {
-            receiver.checksum = byte as u16;
+            decoder.checksum = byte as u16;
         } else if self.readed_bytes_count == 1 {
-            receiver.checksum |= (byte as u16) << 8;
+            decoder.checksum |= (byte as u16) << 8;
         } else {
             unreachable!();
         }
@@ -205,7 +207,7 @@ impl CompleteState {
 }
 
 impl ParsingState for CompleteState {
-    fn put_byte(self: Box<Self>, _byte: u8, _receiver: &mut Receiver) -> Box<dyn ParsingState> {
+    fn put_byte(self: Box<Self>, _byte: u8, _decoder: &mut Decoder) -> Box<dyn ParsingState> {
         self
     }
 

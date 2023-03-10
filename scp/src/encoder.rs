@@ -6,30 +6,30 @@ use crate::{
 };
 use alloc::{boxed::Box, vec::Vec};
 
-pub enum TransmitterError {
+pub enum EncodingError {
     PayloadTooLong,
 }
 
-pub struct Transmitter {
+pub struct Encoder {
     checksum_calculator: Box<dyn ChecksumCalculator>,
 }
 
-impl Transmitter {
+impl Encoder {
     pub fn default() -> Self {
         Self {
             checksum_calculator: Box::new(CRCChecksumCalculator::new()),
         }
     }
 
-    pub fn new(checksum_calculator: Box<dyn ChecksumCalculator>) -> Transmitter {
-        Transmitter {
+    pub fn new(checksum_calculator: Box<dyn ChecksumCalculator>) -> Encoder {
+        Encoder {
             checksum_calculator,
         }
     }
 
-    pub fn prepare_to_transmit(&self, payload: &[u8]) -> Result<Vec<u8>, TransmitterError> {
+    pub fn encode(&self, payload: &[u8]) -> Result<Vec<u8>, EncodingError> {
         if payload.len() > PAYLOAD_MAX_SIZE.into() {
-            return Err(TransmitterError::PayloadTooLong);
+            return Err(EncodingError::PayloadTooLong);
         }
         let header: &[u8] = &[START_BYTE];
         let length: &[u8] = &(payload.len() as u16).to_ne_bytes();

@@ -1,53 +1,53 @@
-use crate::{receiver::{Receiver, ReceiverState, ReceiverError}, transmitter::{Transmitter, TransmitterError}};
+use crate::{decoder::{Decoder, DecodingState, DecoderError}, encoder::{Encoder, EncodingError}};
 use embedded_hal::serial::{Read, Write};
 
-pub struct SerialReceiver<T> {
+pub struct Receiver<T> {
     serial_reader: T,
-    receiver: Receiver,
+    decoder: Decoder,
 }
 
-impl<T> SerialReceiver<T>
+impl<T> Receiver<T>
 where
     T: Read<u8>,
     T::Error: core::fmt::Debug,
 {
     pub fn new(serial: T) -> Self {
-        SerialReceiver {
+        Receiver {
             serial_reader: serial,
-            receiver: Receiver::default(),
+            decoder: Decoder::default(),
         }
     }
 
-    pub fn receive(&mut self) -> Result<([u8; 8192], u16), ReceiverError> {
+    pub fn receive(&mut self) -> Result<([u8; 8192], u16), DecoderError> {
         loop {
             let byte = nb::block!(self.serial_reader.read()).unwrap();
 
-            if let ReceiverState::Complete(result) = self.receiver.put_byte(byte) {
+            if let DecodingState::Complete(result) = self.decoder.put_byte(byte) {
                 return result;
             }
         }
     }
 }
 
-pub struct SerialTransmitter<T> {
+pub struct Transmitter<T> {
     serial_writer: T,
-    transmitter: Transmitter,
+    encoder: Encoder,
 }
 
-impl<T> SerialTransmitter<T>
+impl<T> Transmitter<T>
 where
     T: Write<u8>,
     T::Error: core::fmt::Debug,
 {
     pub fn new(serial: T) -> Self {
-        SerialTransmitter {
+        Transmitter {
             serial_writer: serial,
-            transmitter: Transmitter::default(),
+            encoder: Encoder::default(),
         }
     }
 
-    pub fn transmit(&mut self, data: &[u8]) -> Result<(), TransmitterError> {
-        let encoded_data =  self.transmitter.prepare_to_transmit(data)?;
+    pub fn transmit(&mut self, data: &[u8]) -> Result<(), EncodingError> {
+        let encoded_data =  self.encoder.encode(data)?;
         for byte in encoded_data {
             nb::block!(self.serial_writer.write(byte)).unwrap();
         }
