@@ -6,10 +6,13 @@ mod constants;
 #[cfg(feature = "embedded")]
 pub mod embedded;
 pub mod receiver;
+pub mod transmitter;
 
 #[cfg(test)]
 mod tests {
     extern crate alloc;
+
+    use crate::transmitter::Transmitter;
 
     use super::{
         checksum_calculator::{self, ChecksumCalculator},
@@ -29,8 +32,8 @@ mod tests {
     #[test]
     fn test_receiver() {
         // given
-        let checksum_value = 137u16;
-        let message = "ti pidr";
+        let checksum_value = 1337u16;
+        let message = "jepa";
 
         let header: &[u8] = &[START_BYTE];
         let payload: &[u8] = message.as_bytes();
@@ -44,6 +47,7 @@ mod tests {
             Box::new(MockChecksumCalculator(checksum_value));
         let mut receiver = Receiver::new(checksum_calculator);
         let mut received_payload: Option<([u8; 8192], u16)> = None;
+
         for byte in protocol_message {
             let state = receiver.put_byte(byte);
             if let ReceiverState::Complete(Ok(payload)) = state {
@@ -58,5 +62,28 @@ mod tests {
             &received_payload.0[..received_payload.1.into()],
             message.as_bytes()
         );
+    }
+
+    #[test]
+    fn test_transmitter() {
+        // given
+        let checksum_value = 1337u16;
+        let message = "jepa";
+
+        let header: &[u8] = &[START_BYTE];
+        let payload: &[u8] = message.as_bytes();
+        let length: &[u8] = &(payload.len() as u16).to_ne_bytes();
+        let checksum: &[u8] = &checksum_value.to_ne_bytes();
+
+        let protocol_message = [header, length, payload, checksum].concat();
+
+        // when
+        let checksum_calculator: Box<dyn ChecksumCalculator> =
+            Box::new(MockChecksumCalculator(checksum_value));
+        let transmitter = Transmitter::new(checksum_calculator);
+        let sended_protocol_message = transmitter.prepare_to_transmit(payload).ok().unwrap();
+
+        // then
+        assert_eq!(sended_protocol_message, protocol_message)
     }
 }

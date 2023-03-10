@@ -1,5 +1,5 @@
-use crate::receiver::{Receiver, ReceiverState, ReceiverError};
-use embedded_hal::serial::Read;
+use crate::{receiver::{Receiver, ReceiverState, ReceiverError}, transmitter::{Transmitter, TransmitterError}};
+use embedded_hal::serial::{Read, Write};
 
 pub struct SerialReceiver<T> {
     serial_reader: T,
@@ -26,5 +26,32 @@ where
                 return result;
             }
         }
+    }
+}
+
+pub struct SerialTransmitter<T> {
+    serial_writer: T,
+    transmitter: Transmitter,
+}
+
+impl<T> SerialTransmitter<T>
+where
+    T: Write<u8>,
+    T::Error: core::fmt::Debug,
+{
+    pub fn new(serial: T) -> Self {
+        SerialTransmitter {
+            serial_writer: serial,
+            transmitter: Transmitter::default(),
+        }
+    }
+
+    pub fn transmit(&mut self, data: &[u8]) -> Result<(), TransmitterError> {
+        let encoded_data =  self.transmitter.prepare_to_transmit(data)?;
+        for byte in encoded_data {
+            nb::block!(self.serial_writer.write(byte)).unwrap();
+        }
+
+        Ok(())
     }
 }
