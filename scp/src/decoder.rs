@@ -4,34 +4,26 @@ use crate::{
     checksum_calculator::{CRCChecksumCalculator, ChecksumCalculator},
     constants::*,
 };
-use alloc::boxed::Box;
+use alloc::{boxed::Box, vec::Vec};
 
-#[derive(Debug)]
-pub enum DecoderError {
+#[derive(Clone, Copy)]
+pub enum DecodingError {
     DataIsCorrupted,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy)]
 pub enum DecodingState {
     Idle,
     InProgress,
-    Complete(Result<([u8; 8192], u16), DecoderError>),
-}
-
-impl DecodingState {
-    pub fn get_data(&self) -> Option<([u8; 8192], u16)> {
-        match self {
-            DecodingState::Complete(Ok(data)) => Some(*data),
-            _ => None,
-        }
-    }
+    Complete(Result<(), DecodingError>),
 }
 
 pub struct Decoder {
     checksum_calculator: Box<dyn ChecksumCalculator>,
     parsing_state: Option<Box<dyn ParsingState>>,
+    decoding_state: DecodingState,
     data_length: u16,
-    data: [u8; 8192],
+    data: Vec<u8>,
     checksum: u16,
 }
 
@@ -44,39 +36,55 @@ impl Decoder {
         Decoder {
             checksum_calculator,
             parsing_state: Some(Box::new(WaitForStartByteState::new())),
+            decoding_state: DecodingState::Idle,
             data_length: 0,
-            data: [0; 8192],
+            data: Vec::new(),
             checksum: 0,
         }
     }
 
-    pub fn put_byte(&mut self, byte: u8) -> DecodingState {
+    pub fn put_byte(&mut self, byte: u8) {
         if let Some(parsing_state) = self.parsing_state.take() {
             self.parsing_state = Some(parsing_state.put_byte(byte, self));
 
             if self.parsing_state.as_ref().unwrap().is_complete() {
-                let result = match self.validate_data() {
-                    Some(data) => Ok(data),
-                    None => Err(DecoderError::DataIsCorrupted),
-                };
-                return DecodingState::Complete(result);
+                if self.is_data_valid() {
+                    self.decoding_state = DecodingState::Complete(Ok(()));
+                } else {
+                    self.decoding_state =
+                        DecodingState::Complete(Err(DecodingError::DataIsCorrupted));
+                }
             } else {
-                return DecodingState::InProgress;
+                self.decoding_state = DecodingState::InProgress;
             }
         } else {
             unreachable!();
         }
     }
 
-    fn validate_data(&mut self) -> Option<([u8; 8192], u16)> {
-        let checksum = self
-            .checksum_calculator
-            .calculate(&self.data[..self.data_length as usize]);
-        if checksum == self.checksum {
-            return Some((self.data, self.data_length));
+    pub fn get_state(&self) -> &DecodingState {
+        &self.decoding_state
+    }
+
+    pub fn take_decoded_data(self) -> Option<Vec<u8>> {
+        if let DecodingState::Complete(Ok(_)) = self.decoding_state {
+            Some(self.data)
         } else {
-            return None;
+            None
         }
+    }
+
+    pub fn decoded_data(&self) -> Option<&Vec<u8>> {
+        if let DecodingState::Complete(Ok(_)) = self.decoding_state {
+            Some(&self.data)
+        } else {
+            None
+        }
+    }
+
+    fn is_data_valid(&mut self) -> bool {
+        let checksum = self.checksum_calculator.calculate(self.data.as_slice());
+        checksum == self.checksum
     }
 }
 
@@ -139,25 +147,25 @@ impl ParsingState for ReadDataLengthState {
     }
 }
 
-struct ReadDataState {
-    readed_bytes_count: u16,
-}
+struct ReadDataState;
 
 impl ReadDataState {
     fn new() -> Self {
-        ReadDataState {
-            readed_bytes_count: 0,
-        }
+        ReadDataState {}
     }
 }
 
 impl ParsingState for ReadDataState {
-    fn put_byte(mut self: Box<Self>, byte: u8, decoder: &mut Decoder) -> Box<dyn ParsingState> {
-        decoder.data[self.readed_bytes_count as usize] = byte;
-        self.readed_bytes_count += 1;
-        if self.readed_bytes_count < decoder.data_length {
+    fn put_byte(self: Box<Self>, byte: u8, decoder: &mut Decoder) -> Box<dyn ParsingState> {
+        if decoder.data_length == 0 {
+            return Box::new(ReadChecksumState::new());
+        }
+
+        decoder.data.push(byte);
+
+        if decoder.data.len() < decoder.data_length.into() {
             self
-        } else if self.readed_bytes_count == decoder.data_length {
+        } else if decoder.data.len() == decoder.data_length.into() {
             Box::new(ReadChecksumState::new())
         } else {
             unreachable!();

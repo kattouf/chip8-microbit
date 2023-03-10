@@ -4,20 +4,21 @@
 mod checksum_calculator;
 mod constants;
 pub mod decoder;
-#[cfg(feature = "embedded")]
-pub mod embedded;
 pub mod encoder;
+#[cfg(feature = "embedded")]
+pub mod receiver;
+#[cfg(feature = "embedded")]
+pub mod transmitter;
 
 #[cfg(test)]
 mod tests {
     extern crate alloc;
 
-    use crate::encoder::Encoder;
-
     use super::{
         checksum_calculator::{self, ChecksumCalculator},
         constants::START_BYTE,
         decoder::{Decoder, DecodingState},
+        encoder::Encoder,
     };
     use alloc::boxed::Box;
 
@@ -46,22 +47,18 @@ mod tests {
         let checksum_calculator: Box<dyn ChecksumCalculator> =
             Box::new(MockChecksumCalculator(checksum_value));
         let mut decoder = Decoder::new(checksum_calculator);
-        let mut decoded_payload: Option<([u8; 8192], u16)> = None;
 
         for byte in protocol_message {
-            let state = decoder.put_byte(byte);
-            if let DecodingState::Complete(Ok(payload)) = state {
-                decoded_payload = Some(payload);
+            decoder.put_byte(byte);
+
+            if let DecodingState::Complete(_) = decoder.get_state() {
                 break;
             }
         }
 
         // then
-        let decoded_payload = decoded_payload.unwrap();
-        assert_eq!(
-            &decoded_payload.0[..decoded_payload.1.into()],
-            payload
-        );
+        let decoded_payload = decoder.take_decoded_data().unwrap();
+        assert_eq!(payload, decoded_payload.as_slice());
     }
 
     #[test]
