@@ -43,6 +43,20 @@ impl Decoder {
         }
     }
 
+    pub fn put_bytes<'a, I>(&mut self, bytes: I)
+    where
+        I: IntoIterator<Item = &'a u8>,
+    {
+        let mut iter = bytes.into_iter();
+        while let Some(byte) = iter.next() {
+            self.put_byte(*byte);
+
+            if let DecodingState::Complete(_) = self.decoding_state {
+                break;
+            }
+        }
+    }
+
     pub fn put_byte(&mut self, byte: u8) {
         if let Some(parsing_state) = self.parsing_state.take() {
             self.parsing_state = Some(parsing_state.put_byte(byte, self));
@@ -66,17 +80,9 @@ impl Decoder {
         &self.decoding_state
     }
 
-    pub fn take_decoded_data(self) -> Option<Vec<u8>> {
+    pub fn decoded_data(&self) -> Option<&[u8]> {
         if let DecodingState::Complete(Ok(_)) = self.decoding_state {
-            Some(self.data)
-        } else {
-            None
-        }
-    }
-
-    pub fn decoded_data(&self) -> Option<&Vec<u8>> {
-        if let DecodingState::Complete(Ok(_)) = self.decoding_state {
-            Some(&self.data)
+            Some(self.data.as_slice())
         } else {
             None
         }

@@ -17,7 +17,7 @@ mod tests {
     use super::{
         checksum_calculator::{self, ChecksumCalculator},
         constants::START_BYTE,
-        decoder::{Decoder, DecodingState},
+        decoder::Decoder,
         encoder::Encoder,
     };
     use alloc::boxed::Box;
@@ -48,17 +48,11 @@ mod tests {
             Box::new(MockChecksumCalculator(checksum_value));
         let mut decoder = Decoder::new(checksum_calculator);
 
-        for byte in protocol_message {
-            decoder.put_byte(byte);
-
-            if let DecodingState::Complete(_) = decoder.get_state() {
-                break;
-            }
-        }
+        decoder.put_bytes(protocol_message.as_slice());
 
         // then
-        let decoded_payload = decoder.take_decoded_data().unwrap();
-        assert_eq!(payload, decoded_payload.as_slice());
+        let decoded_payload = decoder.decoded_data().unwrap();
+        assert_eq!(payload, decoded_payload);
     }
 
     #[test]

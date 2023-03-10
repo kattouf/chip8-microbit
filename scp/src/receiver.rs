@@ -27,7 +27,7 @@ where
 
             if let DecodingState::Complete(result) = self.decoder.get_state() {
                 return match result {
-                    Ok(_) => Ok(self.decoder.decoded_data().unwrap().as_slice()),
+                    Ok(_) => Ok(self.decoder.decoded_data().unwrap()),
                     Err(e) => Err(e.clone()),
                 };
             }
