@@ -31,6 +31,24 @@ mod tests {
     }
 
     #[test]
+    fn test_encoder_decoder_integration() {
+        // given
+        let message = "jepa";
+
+        let encoder = Encoder::default();
+        let mut decoder = Decoder::default();
+
+        // when
+        let encoded_data = encoder.encode(message.as_bytes());
+
+        decoder.put_bytes(encoded_data.ok().unwrap().as_slice());
+        let decoded_data = decoder.decoded_data().unwrap();
+
+        // then
+        assert_eq!(decoded_data, message.as_bytes());
+    }
+
+    #[test]
     fn test_decoder() {
         // given
         let checksum_value = 1337u16;
