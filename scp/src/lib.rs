@@ -1,5 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 #![feature(result_flattening)]
+#![feature(error_in_core)]
 
 mod checksum_calculator;
 mod constants;

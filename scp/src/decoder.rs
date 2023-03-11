@@ -211,7 +211,6 @@ impl ParsingState for ReadChecksumState {
         }
     }
 }
-
 struct CompleteState;
 
 impl CompleteState {

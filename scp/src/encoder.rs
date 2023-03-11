@@ -1,14 +1,27 @@
 extern crate alloc;
 
+use core::{error::Error, fmt::Display};
+
 use crate::{
     checksum_calculator::{CRCChecksumCalculator, ChecksumCalculator},
     constants::*,
 };
 use alloc::{boxed::Box, vec::Vec};
 
+#[derive(Debug)]
 pub enum EncodingError {
     PayloadTooLong,
 }
+
+impl Display for EncodingError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            EncodingError::PayloadTooLong => write!(f, "Payload too long"),
+        }
+    }
+}
+
+impl Error for EncodingError {}
 
 pub struct Encoder {
     checksum_calculator: Box<dyn ChecksumCalculator>,
