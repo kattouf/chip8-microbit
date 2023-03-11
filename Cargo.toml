@@ -3,4 +3,5 @@
 members = [
     "chip8-embedded",
     "scp",
+    "rom-transfer",
 ]
