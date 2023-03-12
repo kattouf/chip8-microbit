@@ -5,11 +5,22 @@ use crate::{
     constants::*,
 };
 use alloc::{boxed::Box, vec::Vec};
+use core::{error::Error, fmt::Display};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum DecodingError {
     DataIsCorrupted,
 }
+
+impl Display for DecodingError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            DecodingError::DataIsCorrupted => write!(f, "Data is corrupted"),
+        }
+    }
+}
+
+impl Error for DecodingError {}
 
 #[derive(Clone, Copy)]
 pub enum DecodingState {

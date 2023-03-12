@@ -1,12 +1,11 @@
 extern crate alloc;
 
-use core::{error::Error, fmt::Display};
-
 use crate::{
     checksum_calculator::{CRCChecksumCalculator, ChecksumCalculator},
     constants::*,
 };
 use alloc::{boxed::Box, vec::Vec};
+use core::{error::Error, fmt::Display};
 
 #[derive(Debug)]
 pub enum EncodingError {

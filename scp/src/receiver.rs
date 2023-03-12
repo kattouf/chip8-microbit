@@ -22,7 +22,9 @@ where
 
     pub fn receive(&mut self) -> Result<&[u8], DecodingError> {
         loop {
-            let byte = nb::block!(self.serial_reader.read()).unwrap();
+            let byte = nb::block!(self.serial_reader.read()).unwrap_or_else(|e| {
+                panic!("Error reading from serial: {:?}", e);
+            });
             self.decoder.put_byte(byte);
 
             if let DecodingState::Complete(result) = self.decoder.get_state() {
