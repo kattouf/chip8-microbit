@@ -1,5 +1,7 @@
 use crate::peripheral::Peripheral;
 
+/// COSMAC VIP RAM size - interpreter implementation memory - variables and display refresh memory
+const ROM_SIZE: usize = 0xFFF - 0x1FF - 0x160;
 const PROGRAM_LOCATION: usize = 0x200;
 const FONT_SPRITES_LOCATION: usize = 0x50;
 const FONT_SPRITES: [u8; 80] = [
@@ -52,6 +54,9 @@ impl CPU {
         }
 
         let rom = self.peripheral.rom_loader.load();
+        if rom.len() > ROM_SIZE {
+            panic!("ROM size is too big");
+        }
         for (offset, byte) in rom.iter().enumerate() {
             self.memory[PROGRAM_LOCATION + offset] = *byte;
         }

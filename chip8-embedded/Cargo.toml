@@ -18,3 +18,4 @@ ssd1306 = "0.7.1"
 keypad = "0.2.2"
 void = { version = "1.0.2", default-features = false }
 embedded-alloc = "0.5.0"
+scp = { path = "../scp", features = ["embedded"] }
