@@ -61,12 +61,17 @@ impl Keypad {
 
     pub fn wait_for_keypress(&self) -> u8 {
         let keys = self.keypad.decompose();
+        let mut pressed_key: Option<(u8, u8)> = None;
         loop {
             for (row_index, row) in keys.iter().enumerate() {
                 for (column_index, key) in row.iter().enumerate() {
+                    let key_index = (column_index as u8, row_index as u8);
                     let is_pressed = key.is_low().unwrap();
+                    if is_pressed == false && pressed_key == Some(key_index) {
+                        return self.map_to_cosmac_vip_key(key_index.0, key_index.1);
+                    }
                     if is_pressed == true {
-                        return self.map_to_cosmac_vip_key(column_index as u8, row_index as u8);
+                        pressed_key = Some(key_index);
                     }
                 }
             }
