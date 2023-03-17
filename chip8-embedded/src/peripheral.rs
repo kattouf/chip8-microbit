@@ -8,11 +8,11 @@ pub mod timer;
 
 use microbit::{
     hal::{
-        twim,
+        gpio, twim,
         uarte::{Baudrate, Parity, Uarte},
         Twim,
     },
-    pac::{twim0::frequency::FREQUENCY_A, TIMER0, TIMER1, TIMER2, TWIM0, UARTE0},
+    pac::{twim0::frequency::FREQUENCY_A, TIMER0, TIMER2, TWIM0, UARTE0},
     Board,
 };
 
@@ -27,7 +27,7 @@ use crate::{
 pub struct Peripheral {
     pub rom_loader: ROMLoader<UartePort<UARTE0>>,
     pub delay_timer: Timer<TIMER0>,
-    pub sound_timer: SoundTimer<TIMER1>,
+    pub sound_timer: SoundTimer,
     pub clock_alignment_timer: ClockAlignmentTimer<TIMER2>,
     pub display: Display<Twim<TWIM0>>,
     pub keypad: Keypad,
@@ -50,7 +50,15 @@ impl Peripheral {
         Peripheral {
             rom_loader: ROMLoader::new(serial),
             delay_timer: Timer::new(board.TIMER0),
-            sound_timer: SoundTimer::new(board.TIMER1),
+            sound_timer: SoundTimer::new(
+                board.TIMER1,
+                board.PWM0,
+                board
+                    .speaker_pin
+                    .into_push_pull_output(gpio::Level::Low)
+                    .degrade(),
+            )
+            .unwrap(),
             clock_alignment_timer: ClockAlignmentTimer::new(board.TIMER2),
             display: Display::new(i2c),
             keypad: Keypad::new(board.pins),
