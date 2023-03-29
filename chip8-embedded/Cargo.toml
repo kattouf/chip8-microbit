@@ -14,8 +14,8 @@ panic-rtt-target = { version = "0.1.2", features = ["cortex-m"] }
 nb = "1.0.0"
 embedded-hal = "0.2.6"
 rand = { version = "0.8.5", default-features = false }
-ssd1306 = "0.7.1"
 keypad = "0.2.2"
 void = { version = "1.0.2", default-features = false }
 embedded-alloc = "0.5.0"
 scp = { path = "../scp", features = ["embedded"] }
+st7567s = { path = "../../st7567s" }

@@ -1,4 +1,7 @@
-use ssd1306::{mode::BasicMode, prelude::*, I2CDisplayInterface, Ssd1306};
+use st7567s::{
+    display::ST7567S,
+    interface::{I2CDisplayInterface, I2CInterface},
+};
 
 const BUFFER_WIDTH: usize = 64;
 const BUFFER_HEIGHT: usize = 32;
@@ -6,7 +9,7 @@ const DISPLAY_WIDTH: usize = 128;
 const DISPLAY_HEIGHT: usize = 64;
 
 pub struct Display<I2C> {
-    ssd1306driver: Ssd1306<I2CInterface<I2C>, DisplaySize128x64, BasicMode>,
+    display_driver: ST7567S<I2CInterface<I2C>>,
     pixel_buffer: [bool; BUFFER_WIDTH * BUFFER_HEIGHT],
 }
 
@@ -16,12 +19,11 @@ where
 {
     pub fn new(i2c: I2C) -> Display<I2C> {
         let interface = I2CDisplayInterface::new(i2c);
-        let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0);
+        let mut display = ST7567S::new(interface);
         display.init().unwrap();
-        display.clear().unwrap();
 
         Display {
-            ssd1306driver: display,
+            display_driver: display,
             pixel_buffer: [false; BUFFER_WIDTH * BUFFER_HEIGHT],
         }
     }
@@ -30,7 +32,8 @@ where
         for val in self.pixel_buffer.iter_mut() {
             *val = false;
         }
-        self.ssd1306driver.clear().unwrap();
+        self.display_driver.clear();
+        self.display_driver.flush().unwrap();
     }
 
     pub fn draw_sprite(
@@ -94,15 +97,22 @@ where
 
         let min_x = coordinate.0;
         let min_y = coordinate.1;
-        let max_x = coordinate.0 + 8 - 1;
-        let max_y = coordinate.1 + bytes_len as u8 - 1;
+        let width = 8;
+        let height = bytes_len as u8;
 
-        let start = (min_x * scale, min_y * scale);
-        let end = ((max_x + 1).min(64) * scale, (max_y | 7).min(32) * scale);
+        let min_x = min_x * scale;
+        let min_y = min_y * scale;
+        let width = width * scale;
+        let height = height * scale;
 
-        self.ssd1306driver.set_draw_area(start, end).unwrap();
-        self.ssd1306driver
-            .bounded_draw(&driver_friendly_data, DISPLAY_WIDTH, start, end)
+        let start = (min_x, min_y);
+        let end = (
+            (min_x + width - 1).min(DISPLAY_WIDTH as u8 - 1),
+            (min_y + height - 1).min(DISPLAY_HEIGHT as u8 - 1),
+        );
+
+        self.display_driver
+            .bounded_draw(&driver_friendly_data, start, end)
             .unwrap();
 
         pixel_unset_flag
