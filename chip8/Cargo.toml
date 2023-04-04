@@ -1,5 +1,5 @@
 [package]
-name = "chip8-embedded"
+name = "chip8"
 version = "0.1.0"
 authors = ["kattouf <vasiliy.kattouf@gmail.com>"]
 edition = "2018"
