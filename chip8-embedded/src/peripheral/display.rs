@@ -1,5 +1,5 @@
 use st7567s::{
-    display::ST7567S,
+    display::{DirectWriteMode, ST7567S},
     interface::{I2CDisplayInterface, I2CInterface},
 };
 
@@ -9,7 +9,7 @@ const DISPLAY_WIDTH: usize = 128;
 const DISPLAY_HEIGHT: usize = 64;
 
 pub struct Display<I2C> {
-    display_driver: ST7567S<I2CInterface<I2C>>,
+    display_driver: ST7567S<I2CInterface<I2C>, DirectWriteMode>,
     pixel_buffer: [bool; BUFFER_WIDTH * BUFFER_HEIGHT],
 }
 
@@ -29,11 +29,10 @@ where
     }
 
     pub fn clear_screen(&mut self) {
-        for val in self.pixel_buffer.iter_mut() {
-            *val = false;
-        }
-        self.display_driver.clear();
-        self.display_driver.flush().unwrap();
+        self.pixel_buffer = [false; BUFFER_WIDTH * BUFFER_HEIGHT];
+        self.display_driver
+            .draw([0; DISPLAY_WIDTH * DISPLAY_HEIGHT / 8].as_slice())
+            .unwrap();
     }
 
     pub fn draw_sprite(
