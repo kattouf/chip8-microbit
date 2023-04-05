@@ -1,15 +1,12 @@
 use embedded_hal::digital::v2::InputPin;
 use keypad::{keypad_new, keypad_struct};
-use void::Void;
 use microbit::{
-    hal::{
-        gpio::{
-            p0::*,
-            p1::*,
-            Input, Level, OpenDrain, OpenDrainConfig, Output, PullUp,
-        },
-    }, board::Pins,
+    board::Pins,
+    hal::gpio::{p0::*, p1::*, Input, Level, OpenDrain, OpenDrainConfig, Output, PullUp},
 };
+use void::Void;
+
+use crate::common::{SimpleError, SimpleResult};
 
 keypad_struct! {
     pub struct HexKeypad<Error = Void> {
@@ -33,7 +30,6 @@ pub struct Keypad {
 }
 
 impl Keypad {
-
     pub fn new(pins: Pins) -> Keypad {
         let keypad = keypad_new!(HexKeypad {
             rows: (
@@ -54,21 +50,21 @@ impl Keypad {
             ),
         });
 
-        Keypad {
-            keypad
-        }
+        Keypad { keypad }
     }
 
-    pub fn wait_for_keypress(&self) -> u8 {
+    pub fn wait_for_keypress(&self) -> SimpleResult<u8> {
         let keys = self.keypad.decompose();
         let mut pressed_key: Option<(u8, u8)> = None;
         loop {
             for (row_index, row) in keys.iter().enumerate() {
                 for (column_index, key) in row.iter().enumerate() {
                     let key_index = (column_index as u8, row_index as u8);
-                    let is_pressed = key.is_low().unwrap();
+                    let is_pressed = key
+                        .is_low()
+                        .map_err(|_err| SimpleError("Key reading error"))?;
                     if is_pressed == false && pressed_key == Some(key_index) {
-                        return self.map_to_cosmac_vip_key(key_index.0, key_index.1);
+                        return Ok(self.map_to_cosmac_vip_key(key_index.0, key_index.1));
                     }
                     if is_pressed == true {
                         pressed_key = Some(key_index);
@@ -78,11 +74,13 @@ impl Keypad {
         }
     }
 
-    pub fn is_pressed(&self, key: u8) -> bool {
+    pub fn is_pressed(&self, key: u8) -> SimpleResult<bool> {
         let (column, row) = self.map_from_cosmac_vip_key(key);
 
         let keys = self.keypad.decompose();
-        keys[row as usize][column as usize].is_low().unwrap()
+        keys[row as usize][column as usize]
+            .is_low()
+            .map_err(|_err| SimpleError("Key reading error"))
     }
 
     fn map_to_cosmac_vip_key(&self, column: u8, row: u8) -> u8 {

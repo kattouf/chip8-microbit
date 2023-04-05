@@ -1,3 +1,4 @@
+use crate::{SimpleError, SimpleResult};
 use core::fmt;
 
 use embedded_hal::blocking::serial as bserial;
@@ -10,11 +11,11 @@ static mut RX_BUF: [u8; 1] = [0; 1];
 pub struct UartePort<T: Instance>(UarteTx<T>, UarteRx<T>);
 
 impl<T: Instance> UartePort<T> {
-    pub fn new(serial: Uarte<T>) -> UartePort<T> {
+    pub fn new(serial: Uarte<T>) -> SimpleResult<UartePort<T>> {
         let (tx, rx) = serial
             .split(unsafe { &mut TX_BUF }, unsafe { &mut RX_BUF })
-            .unwrap();
-        UartePort(tx, rx)
+            .map_err(|_err| SimpleError("UartePort initialization error"))?;
+        Ok(UartePort(tx, rx))
     }
 }
 

@@ -17,7 +17,7 @@ use microbit::{
 };
 
 use crate::{
-    common::uarte_port::UartePort,
+    common::{SimpleError, SimpleResult, UartePort},
     peripheral::{
         clock_alignment_timer::ClockAlignmentTimer, display::Display, keypad::Keypad, rng::Rng,
         rom_loader::ROMLoader, sound_timer::SoundTimer, timer::Timer,
@@ -35,7 +35,7 @@ pub struct Peripheral {
 }
 
 impl Peripheral {
-    pub fn new(board: Board) -> Self {
+    pub fn new(board: Board) -> SimpleResult<Self> {
         let i2c = twim::Twim::new(board.TWIM0, board.i2c_external.into(), FREQUENCY_A::K400);
         let serial = {
             let serial = Uarte::new(
@@ -45,9 +45,9 @@ impl Peripheral {
                 Baudrate::BAUD115200,
             );
             UartePort::new(serial)
-        };
+        }?;
 
-        Peripheral {
+        Ok(Peripheral {
             rom_loader: ROMLoader::new(serial),
             delay_timer: Timer::new(board.TIMER0),
             sound_timer: SoundTimer::new(
@@ -58,11 +58,11 @@ impl Peripheral {
                     .into_push_pull_output(gpio::Level::Low)
                     .degrade(),
             )
-            .unwrap(),
+            .ok_or(SimpleError("Sound timer can't initialize"))?,
             clock_alignment_timer: ClockAlignmentTimer::new(board.TIMER2),
             display: Display::new(i2c),
             keypad: Keypad::new(board.pins),
             rng: Rng::new(board.RNG),
-        }
+        })
     }
 }

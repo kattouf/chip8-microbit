@@ -1,3 +1,4 @@
+use crate::common::{SimpleError, SimpleResult};
 use crate::peripheral::Peripheral;
 
 /// COSMAC VIP RAM size - interpreter implementation memory - variables and display refresh memory
@@ -24,12 +25,12 @@ const FONT_SPRITES: [u8; 80] = [
 ];
 
 pub struct CPU {
-    registers: [u8; 16],
-    position_in_memory: usize,
-    memory: [u8; 0x1000], // 4kb
+    memory: [u8; 4096],
     stack: [u16; 16],
-    stack_pointer: usize,
+    registers: [u8; 16],
     index_register: u16,
+    instruction_pointer: usize,
+    stack_pointer: usize,
     modern_mode: bool,
     peripheral: Peripheral,
 }
@@ -37,35 +38,37 @@ pub struct CPU {
 impl CPU {
     pub fn new(modern_mode: bool, peripheral: Peripheral) -> Self {
         CPU {
-            registers: [0; 16],
-            position_in_memory: PROGRAM_LOCATION,
             memory: [0; 4096],
             stack: [0; 16],
-            stack_pointer: 0,
+            registers: [0; 16],
             index_register: 0,
+            instruction_pointer: PROGRAM_LOCATION,
+            stack_pointer: 0,
             modern_mode,
             peripheral,
         }
     }
 
-    pub fn load_data(&mut self) {
+    pub fn load_data(&mut self) -> SimpleResult<()> {
         for (offset, byte) in FONT_SPRITES.iter().enumerate() {
             self.memory[FONT_SPRITES_LOCATION + offset] = *byte;
         }
 
-        let rom = self.peripheral.rom_loader.load();
+        let rom = self.peripheral.rom_loader.load()?;
         if rom.len() > ROM_SIZE {
-            panic!("ROM size is too big");
+            return Err(SimpleError("ROM size is too big"));
         }
         for (offset, byte) in rom.iter().enumerate() {
             self.memory[PROGRAM_LOCATION + offset] = *byte;
         }
+
+        Ok(())
     }
 
-    pub fn run(&mut self) -> ! {
+    pub fn run(&mut self) -> SimpleResult<!> {
         loop {
             let opcode = self.read_opcode();
-            self.position_in_memory += 2;
+            self.instruction_pointer += 2;
 
             let c = ((opcode & 0xF000) >> 12) as u8;
             let x = ((opcode & 0x0F00) >> 8) as u8;
@@ -76,11 +79,11 @@ impl CPU {
             let nnn = opcode & 0xFFF;
 
             match (c, x, y, n) {
-                (0, 0, 0, 0) => { panic!("zero insrtuction code"); },
+                (0, 0, 0, 0) => return Err(SimpleError("zero insrtuction code")),
                 (0, 0, 0xE, 0) => self.clear_screen(),
-                (0, 0, 0xE, 0xE) => self.ret(),
+                (0, 0, 0xE, 0xE) => self.ret()?,
                 (0x1, _, _, _) => self.jump(nnn),
-                (0x2, _, _, _) => self.call(nnn),
+                (0x2, _, _, _) => self.call(nnn)?,
                 (0x3, _, _, _) => self.skip_next_if_equal_xnn(x, nn),
                 (0x4, _, _, _) => self.skip_next_if_not_equal_xnn(x, nn),
                 (0x5, _, _, 0) => self.skip_next_if_equal_xy(x, y),
@@ -97,13 +100,13 @@ impl CPU {
                 (0x8, _, _, 0xE) => self.shift_y_left(x, y),
                 (0x9, _, _, 0) => self.skip_next_if_not_equal_xy(x, y),
                 (0xA, _, _, _) => self.set_innn(nnn),
-                (0xB, _, _, _) => self.jump_with_offset(x, nnn),
-                (0xC, _, _, _) => self.random(x, nn),
+                (0xB, _, _, _) => self.jump_with_xoffset(x, nnn),
+                (0xC, _, _, _) => self.set_x_random(x, nn),
                 (0xD, _, _, _) => self.draw_sprite(x, y, n),
-                (0xE, _, 0x9, 0xE) => self.skip_next_if_key_pressed(x),
-                (0xE, _, 0xA, 0x1) => self.skip_next_if_key_not_pressed(x),
+                (0xE, _, 0x9, 0xE) => self.skip_next_if_key_pressed(x)?,
+                (0xE, _, 0xA, 0x1) => self.skip_next_if_key_not_pressed(x)?,
                 (0xF, _, 0x0, 0x7) => self.set_x_delay_timer(x),
-                (0xF, _, 0x0, 0xA) => self.wait_for_keypress(x),
+                (0xF, _, 0x0, 0xA) => self.wait_for_keypress(x)?,
                 (0xF, _, 0x1, 0x5) => self.set_delay_timer_x(x),
                 (0xF, _, 0x1, 0x8) => self.set_sound_timer_x(x),
                 (0xF, _, 0x1, 0xE) => self.add_ix(x),
@@ -111,31 +114,37 @@ impl CPU {
                 (0xF, _, 0x3, 0x3) => self.bcd_x(x),
                 (0xF, _, 0x5, 0x5) => self.save_regs_to_memory(x),
                 (0xF, _, 0x6, 0x5) => self.load_regs_from_memory(x),
-                _ => panic!("undefined opcode {:04x}", opcode),
+                _ => return Err(SimpleError("undefined opcode")),
             }
 
             self.peripheral.clock_alignment_timer.wait();
         }
     }
 
-    fn wait_for_keypress(&mut self, x: u8) {
-        self.registers[x as usize] = self.peripheral.keypad.wait_for_keypress();
+    fn wait_for_keypress(&mut self, x: u8) -> SimpleResult<()> {
+        self.registers[x as usize] = self.peripheral.keypad.wait_for_keypress()?;
+
+        Ok(())
     }
 
-    fn skip_next_if_key_pressed(&mut self, x: u8) {
+    fn skip_next_if_key_pressed(&mut self, x: u8) -> SimpleResult<()> {
         let x_val = self.registers[x as usize] & 0x0F;
 
-        if self.peripheral.keypad.is_pressed(x_val) {
-            self.position_in_memory += 2;
+        if self.peripheral.keypad.is_pressed(x_val)? {
+            self.instruction_pointer += 2;
         }
+
+        Ok(())
     }
 
-    fn skip_next_if_key_not_pressed(&mut self, x: u8) {
+    fn skip_next_if_key_not_pressed(&mut self, x: u8) -> SimpleResult<()> {
         let x_val = self.registers[x as usize] & 0x0F;
 
-        if !self.peripheral.keypad.is_pressed(x_val) {
-            self.position_in_memory += 2;
+        if !self.peripheral.keypad.is_pressed(x_val)? {
+            self.instruction_pointer += 2;
         }
+
+        Ok(())
     }
 
     fn draw_sprite(&mut self, x: u8, y: u8, n: u8) {
@@ -148,7 +157,10 @@ impl CPU {
         let mut data: [u8; 15] = [0; 15];
         data.copy_from_slice(src_data);
 
-        let part_of_pixel_did_unset = self.peripheral.display.draw_sprite(coordinate, data, n.into());
+        let part_of_pixel_did_unset =
+            self.peripheral
+                .display
+                .draw_sprite(coordinate, data, n.into());
         self.registers[0xF] = if part_of_pixel_did_unset { 1 } else { 0 };
     }
 
@@ -220,7 +232,7 @@ impl CPU {
         self.registers[0xF] = if overflow { 1 } else { 0 };
     }
 
-    fn random(&mut self, x: u8, nn: u8) {
+    fn set_x_random(&mut self, x: u8, nn: u8) {
         let random_num = self.peripheral.rng.gen_random_byte();
         self.registers[x as usize] = random_num & nn;
     }
@@ -307,7 +319,7 @@ impl CPU {
         let x_val = self.registers[x as usize];
 
         if x_val == nn {
-            self.position_in_memory += 2;
+            self.instruction_pointer += 2;
         }
     }
 
@@ -315,7 +327,7 @@ impl CPU {
         let x_val = self.registers[x as usize];
 
         if x_val != nn {
-            self.position_in_memory += 2;
+            self.instruction_pointer += 2;
         }
     }
 
@@ -324,7 +336,7 @@ impl CPU {
         let y_val = self.registers[y as usize];
 
         if x_val == y_val {
-            self.position_in_memory += 2;
+            self.instruction_pointer += 2;
         }
     }
 
@@ -333,47 +345,51 @@ impl CPU {
         let y_val = self.registers[y as usize];
 
         if x_val != y_val {
-            self.position_in_memory += 2;
+            self.instruction_pointer += 2;
         }
     }
 
     fn jump(&mut self, addr: u16) {
-        self.position_in_memory = addr as usize;
+        self.instruction_pointer = addr as usize;
     }
 
-    fn jump_with_offset(&mut self, x: u8, nnn: u16) {
+    fn jump_with_xoffset(&mut self, x: u8, nnn: u16) {
         if self.modern_mode {
-            self.position_in_memory = nnn as usize + self.registers[x as usize] as usize;
+            self.instruction_pointer = nnn as usize + self.registers[x as usize] as usize;
         } else {
-            self.position_in_memory = nnn as usize + self.registers[0] as usize;
+            self.instruction_pointer = nnn as usize + self.registers[0] as usize;
         }
     }
 
-    fn call(&mut self, addr: u16) {
+    fn call(&mut self, addr: u16) -> SimpleResult<()> {
         let sp = self.stack_pointer;
         let stack = &mut self.stack;
 
         if sp > stack.len() {
-            panic!("Stack overflow");
+            return Err(SimpleError("Stack overflow"));
         }
 
-        stack[sp] = self.position_in_memory as u16;
+        stack[sp] = self.instruction_pointer as u16;
         self.stack_pointer += 1;
-        self.position_in_memory = addr as usize;
+        self.instruction_pointer = addr as usize;
+
+        Ok(())
     }
 
-    fn ret(&mut self) {
+    fn ret(&mut self) -> SimpleResult<()> {
         if self.stack_pointer == 0 {
-            panic!("Stack underflow");
+            return Err(SimpleError("Stack underflow"));
         }
 
         self.stack_pointer -= 1;
         let addr = self.stack[self.stack_pointer];
-        self.position_in_memory = addr as usize;
+        self.instruction_pointer = addr as usize;
+
+        Ok(())
     }
 
     fn read_opcode(&self) -> u16 {
-        let p = self.position_in_memory;
+        let p = self.instruction_pointer;
         let op_byte1 = self.memory[p] as u16;
         let op_byte2 = self.memory[p + 1] as u16;
 

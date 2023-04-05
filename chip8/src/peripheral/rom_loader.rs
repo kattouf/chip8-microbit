@@ -1,5 +1,6 @@
 use embedded_hal::serial::Read;
 use scp::receiver::Receiver;
+use crate::common::{SimpleResult, SimpleError};
 
 pub struct ROMLoader<T> {
     receiver: Receiver<T>,
@@ -16,7 +17,7 @@ where
         }
     }
 
-    pub fn load(&mut self) -> &[u8] {
-        self.receiver.receive().unwrap()
+    pub fn load(&mut self) -> SimpleResult<&[u8]> {
+        self.receiver.receive().map_err(|_err| SimpleError("ROM receiving error"))
     }
 }
