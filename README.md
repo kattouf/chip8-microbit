@@ -1,10 +1,9 @@
 # Embedded CHIP-8 Interpreter
 
-This is a CHIP-8 interpreter written in Rust that runs on a micro:bit board. Programs are not embedded in the interpreter binary and are instead loaded at runtime via a serial interface.
+This is a CHIP-8 interpreter written in Rust that runs on a micro:bit board.  
+Programs are not embedded in the interpreter binary and are instead loaded at runtime via a serial interface.
 
-## Demo
-
-// Add video or photo of the interpreter running
+<img src="https://user-images.githubusercontent.com/7829589/230412101-70491f00-5c3c-4737-a95e-a7a8a06c626b.jpg" width="500">
 
 ## Project Structure
 
@@ -16,6 +15,10 @@ This is a CHIP-8 interpreter written in Rust that runs on a micro:bit board. Pro
 
 - [CHIP‐8 Instruction Set](https://github.com/mattmikolay/chip-8/wiki/CHIP%E2%80%908-Instruction-Set)
 - [High-level guide to making a CHIP-8 emulator](https://tobiasvl.github.io/blog/write-a-chip-8-emulator/)
+
+## Demo
+
+https://user-images.githubusercontent.com/7829589/230414013-41b7a88c-8836-4b98-831e-7b4f3a3adfbb.mov
 
 ## TODO
 
